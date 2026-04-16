@@ -129,15 +129,55 @@ function getGlobalPreset() {
 function getProjectPreset(wsRoot) {
     const projectPath = getProjectSettingsPath(wsRoot);
     if (!projectPath || !fs.existsSync(projectPath)) return null;
+
     const settings = readJSON(projectPath);
-    const presetId = settings?.presetId || '';
-    return matchPreset(presetId);
+    if (!settings) return null;
+
+    const presetId = settings.presetId || '';
+
+    // 情况1: 有 presetId，尝试匹配预设
+    if (presetId) {
+        const matched = matchPreset(presetId);
+        if (matched) return matched;
+        // presetId 存在但匹配不到预设，返回孤立配置标记
+        if (settings.env && Object.keys(settings.env).length > 0) {
+            return {
+                id: presetId,
+                label: `(预设丢失: ${presetId})`,
+                description: '预设已被删除，环境变量仍在生效',
+                env: settings.env,
+                _orphaned: true
+            };
+        }
+        // 有 presetId 但没有 env，预设也找不到，视为跟随全局
+        return null;
+    }
+
+    // 情况2: 没有 presetId 但有 env，视为自定义配置
+    if (settings.env && Object.keys(settings.env).length > 0) {
+        return {
+            id: '_custom_',
+            label: '自定义配置',
+            description: '手动配置的环境变量',
+            env: settings.env,
+            _custom: true
+        };
+    }
+
+    // 文件存在但内容为空或只有非相关字段
+    return null;
 }
 
 /** 获取当前生效的模型来源 */
 function getActiveModel(wsRoot) {
     const projectPreset = getProjectPreset(wsRoot);
     if (projectPreset) {
+        if (projectPreset._orphaned) {
+            return { preset: projectPreset, source: 'project_orphaned' };
+        }
+        if (projectPreset._custom) {
+            return { preset: projectPreset, source: 'project_custom' };
+        }
         return { preset: projectPreset, source: 'project' };
     }
     const globalPreset = getGlobalPreset();
@@ -157,7 +197,11 @@ async function switchProjectPreset(wsRoot, preset) {
     if (!wsRoot) return;
     const projectPath = getProjectSettingsPath(wsRoot);
     const existing = readJSON(projectPath) || {};
-    existing.env = { ...preset.env };
+
+    // 合并环境变量：保留用户添加的自定义变量，预设变量覆盖
+    const mergedEnv = { ...existing.env, ...preset.env };
+
+    existing.env = mergedEnv;
     existing.presetId = preset.id;
     writeJSON(projectPath, existing);
     addToGitignore(wsRoot);
@@ -166,7 +210,20 @@ async function switchProjectPreset(wsRoot, preset) {
 
 async function restoreFollowGlobal(wsRoot) {
     if (!wsRoot) return;
-    deleteFile(getProjectSettingsPath(wsRoot));
+    const projectPath = getProjectSettingsPath(wsRoot);
+    const existing = readJSON(projectPath) || {};
+
+    // 只删除 env 和 presetId 字段，保留其他配置
+    delete existing.env;
+    delete existing.presetId;
+
+    // 如果文件为空对象，则删除文件；否则写入保留的配置
+    if (Object.keys(existing).length === 0) {
+        deleteFile(projectPath);
+    } else {
+        writeJSON(projectPath, existing);
+    }
+
     vscode.window.showInformationMessage('项目已恢复跟随全局');
 }
 
@@ -199,9 +256,13 @@ function updateStatusBar() {
     const label = preset?.label || '未设置';
 
     let text, tooltip;
-    if (source === 'project') {
-        text = `$(folder) ${label} 项目(${wsName})`;
-        tooltip = `📂 项目 (${wsName}): ${label}\n📝 项目独立配置\n\n点击切换配置`;
+    if (source === 'project' || source === 'project_orphaned' || source === 'project_custom') {
+        const icon = source === 'project_orphaned' ? '$(warning)' : (source === 'project_custom' ? '$(edit)' : '$(folder)');
+        text = `${icon} ${label} 项目(${wsName})`;
+        const extraInfo = source === 'project_orphaned'
+            ? '\n⚠️ 预设已丢失'
+            : (source === 'project_custom' ? '\n📝 自定义配置' : '\n📝 项目独立配置');
+        tooltip = `📂 项目 (${wsName}): ${label}${extraInfo}\n\n点击切换配置`;
     } else if (wsRoot) {
         text = `$(sync) ${label} [跟随全局]`;
         tooltip = `🔄 跟随全局 (${label})\n\n点击切换配置`;
@@ -386,16 +447,53 @@ function envListHtml(preset) {
 function renderPanel(data) {
     const { globalPreset, projectPreset, activePreset, source, presets, wsRoot } = data;
     const globalHtml = presets.map(p => presetHtml(p, globalPreset?.id === p.id, 'switchGlobal')).join('');
-    const projectHtml = wsRoot
-        ? `<div class="follow-item ${!projectPreset ? 'active' : ''}" onclick="followGlobal()">
+
+    // 判断是否真正跟随全局
+    const isFollowGlobal = source === 'followGlobal';
+    // 判断是否有孤立配置（presetId 找不到）
+    const isOrphaned = source === 'project_orphaned';
+    // 判断是否有自定义配置
+    const isCustom = source === 'project_custom';
+
+    // 项目配置区域
+    let projectHtml = '';
+    if (wsRoot) {
+        // 孤立配置警告（如果有）
+        if (isOrphaned) {
+            projectHtml = `<div class="warning-box" style="background:var(--vscode-inputValidation-warningBackground);border:1px solid var(--vscode-inputValidation-warningBorder);padding:10px;border-radius:4px;margin-bottom:8px;">
+                <div style="font-weight:600;">⚠️ 预设配置丢失</div>
+                <div style="font-size:12px;margin-top:4px;">项目引用的预设 "${projectPreset.id}" 已不存在。环境变量仍在生效。</div>
+            </div>`;
+        }
+        // 自定义配置提示（如果有）
+        if (isCustom) {
+            projectHtml = `<div class="info-box" style="background:var(--vscode-editorInfo-background,rgba(0,122,204,0.1));border:1px solid var(--vscode-editorInfo-foreground,rgba(0,122,204,0.5));padding:10px;border-radius:4px;margin-bottom:8px;">
+                <div style="font-weight:600;">📝 自定义配置</div>
+                <div style="font-size:12px;margin-top:4px;">项目使用手动配置的环境变量，未关联预设。</div>
+            </div>`;
+        }
+        // 跟随全局选项
+        projectHtml += `<div class="follow-item ${isFollowGlobal ? 'active' : ''}" onclick="followGlobal()">
                 <div class="follow-name">🔄 跟随全局</div>
-                ${!projectPreset ? '<div class="badge-active">当前</div>' : ''}
+                ${isFollowGlobal ? '<div class="badge-active">当前</div>' : ''}
                 <div class="follow-desc">使用全局模型: ${globalPreset?.label || '未设置'}</div>
            </div>` +
-          presets.map(p => presetHtml(p, projectPreset?.id === p.id, 'switchProject')).join('')
-        : '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>';
+          presets.map(p => presetHtml(p, projectPreset?.id === p.id && !isOrphaned && !isCustom, 'switchProject')).join('');
+    } else {
+        projectHtml = '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>';
+    }
 
-    const sourceText = source === 'project' ? `📂 项目独立 (${path.basename(wsRoot || '')})` : `🔄 跟随全局 (${globalPreset?.label || '未设置'})`;
+    // sourceText 根据不同状态显示不同文本
+    let sourceText = '';
+    if (source === 'project') {
+        sourceText = `📂 项目独立 (${path.basename(wsRoot || '')})`;
+    } else if (source === 'project_orphaned') {
+        sourceText = `⚠️ 预设丢失 (${path.basename(wsRoot || '')})`;
+    } else if (source === 'project_custom') {
+        sourceText = `📝 自定义配置 (${path.basename(wsRoot || '')})`;
+    } else {
+        sourceText = `🔄 跟随全局 (${globalPreset?.label || '未设置'})`;
+    }
 
     return `<!DOCTYPE html>
 <html>
