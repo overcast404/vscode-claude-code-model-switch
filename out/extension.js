@@ -196,11 +196,11 @@ function updateStatusBar() {
 
     let text, tooltip;
     if (source === 'project') {
-        text = `$(folder) ${label}`;
+        text = `$(folder) ${label} 项目(${wsName})`;
         tooltip = `📂 项目 (${wsName}): ${label}\n📝 项目独立配置\n\n点击切换配置`;
     } else if (wsRoot) {
-        text = `$(sync) ${label}`;
-        tooltip = `🔄 项目 (${wsName}): 跟随全局 (${label})\n\n点击切换配置`;
+        text = `$(sync) ${label} [跟随全局]`;
+        tooltip = `🔄 跟随全局 (${label})\n\n点击切换配置`;
     } else {
         text = `$(gear) ${label}`;
         tooltip = `⚙️ 全局: ${label}\n\n点击切换配置`;
