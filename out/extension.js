@@ -40,457 +40,314 @@ const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const fs = __importStar(require("fs"));
 
-// 默认预设（仅当全局 envs.json 也不存在时用作兜底）
+// ==================== 默认预设（兜底） ====================
 const DEFAULT_PRESETS = [
-    {
-        id: 'qwen',
-        label: 'cc:qwen3.6-plus',
-        description: 'DashScope qwen3.6-plus',
-        env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-            API_TIMEOUT_MS: '300000',
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-            ANTHROPIC_MODEL: 'qwen3.6-plus',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus'
-        }
-    },
-    {
-        id: 'glm5',
-        label: 'cc:GLM-5',
-        description: 'DashScope GLM-5',
-        env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-            API_TIMEOUT_MS: '300000',
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-            ANTHROPIC_MODEL: 'glm-5',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5'
-        }
-    },
-    {
-        id: 'kimi',
-        label: 'cc:kimi-k2.5',
-        description: 'DashScope kimi-k2.5',
-        env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-            API_TIMEOUT_MS: '300000',
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-            ANTHROPIC_MODEL: 'kimi-k2.5',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5'
-        }
-    },
-    {
-        id: 'minimax',
-        label: 'cc:MiniMax-M2.5',
-        description: 'DashScope MiniMax-M2.5',
-        env: {
-            ANTHROPIC_AUTH_TOKEN: '',
-            ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-            API_TIMEOUT_MS: '300000',
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-            ANTHROPIC_MODEL: 'MiniMax-M2.5',
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5',
-            ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5'
-        }
-    }
+    { id: 'qwen', label: 'cc:qwen3.6-plus', description: 'DashScope qwen3.6-plus',
+      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        ANTHROPIC_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus' } },
+    { id: 'glm5', label: 'cc:GLM-5', description: 'DashScope GLM-5',
+      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        ANTHROPIC_MODEL: 'glm-5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5' } },
+    { id: 'kimi', label: 'cc:kimi-k2.5', description: 'DashScope kimi-k2.5',
+      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        ANTHROPIC_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5' } },
+    { id: 'minimax', label: 'cc:MiniMax-M2.5', description: 'DashScope MiniMax-M2.5',
+      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        ANTHROPIC_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5' } }
 ];
 
-// ==================== 作用域管理 ====================
-// 当前配置作用域：'global' 或 'project'
-let currentScope = 'project'; // 默认项目级
-
-// 保存扩展上下文
+// ==================== 常量 ====================
 let extensionContext;
+const GLOBAL_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+const GLOBAL_ENVS_PATH = path.join(os.homedir(), '.claude', 'envs.json');
 
-// 获取当前工作区根路径
 function getWorkspaceRoot() {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders && workspaceFolders.length > 0) {
-        return workspaceFolders[0].uri.fsPath;
-    }
-    return null;
+    const folders = vscode.workspace.workspaceFolders;
+    return folders && folders.length > 0 ? folders[0].uri.fsPath : null;
 }
 
-// 根据作用域获取 settings.json 路径
-function getSettingsPath() {
-    if (currentScope === 'project') {
-        const wsRoot = getWorkspaceRoot();
-        if (wsRoot) {
-            return path.join(wsRoot, '.claude', 'settings.json');
-        }
-    }
-    // global 或无工作区时回退到全局
-    return path.join(os.homedir(), '.claude', 'settings.json');
+function getProjectSettingsPath(wsRoot) {
+    return wsRoot ? path.join(wsRoot, '.claude', 'settings.json') : null;
 }
 
-// 根据作用域获取 envs.json 路径
-function getEnvsConfigPath() {
-    if (currentScope === 'project') {
-        const wsRoot = getWorkspaceRoot();
-        if (wsRoot) {
-            return path.join(wsRoot, '.claude', 'envs.json');
-        }
-    }
-    return path.join(os.homedir(), '.claude', 'envs.json');
-}
-
-// 作用域标签
-function getScopeLabel() {
-    return currentScope === 'project' ? '项目' : '全局';
-}
-
-function getScopeIcon() {
-    return currentScope === 'project' ? '$(folder)' : '$(gear)';
-}
-
-// 切换作用域
-async function toggleScope() {
-    const wsRoot = getWorkspaceRoot();
-    if (!wsRoot) {
-        vscode.window.showWarningMessage('请先打开一个项目文件夹，再切换到项目级配置');
-        return;
-    }
-    currentScope = currentScope === 'global' ? 'project' : 'global';
-    // 保存作用域到全局状态
-    await extensionContext.globalState.update('ccSwitch.scope', currentScope);
-    updateStatusBar();
-    const scopeName = getScopeLabel();
-    const target = getSettingsPath();
-    vscode.window.showInformationMessage(`已切换到${scopeName}级配置 → ${target}`);
-}
-
-// ==================== 配置文件读写 ====================
-
-// 读取全局 envs.json（始终从用户目录读取）
-function readGlobalEnvs() {
-    const globalPath = path.join(os.homedir(), '.claude', 'envs.json');
+// ==================== 文件读写 ====================
+function readJSON(filePath) {
     try {
-        if (fs.existsSync(globalPath)) {
-            const content = fs.readFileSync(globalPath, 'utf-8');
-            const parsed = JSON.parse(content);
-            if (parsed.presets && parsed.presets.length > 0) {
-                return parsed;
-            }
+        if (fs.existsSync(filePath)) {
+            return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         }
-    }
-    catch { }
+    } catch { }
     return null;
 }
 
-// 初始化默认 envs.json 配置
-// 项目级时：从全局 envs.json 复制预设
-// 全局级时：从全局 envs.json 读取，不存在则用内置兜底
-function initDefaultEnvsConfig() {
-    const configPath = getEnvsConfigPath();
-    if (!fs.existsSync(configPath)) {
-        // 优先从全局预设复制
-        const globalEnvs = readGlobalEnvs();
-        const presets = (globalEnvs && globalEnvs.presets)
-            ? globalEnvs.presets
-            : DEFAULT_PRESETS;
+function writeJSON(filePath, data) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
 
-        const defaultConfig = { presets: presets };
+function deleteFile(filePath) {
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { }
+}
+
+// ==================== 预设（仅全局） ====================
+function initGlobalEnvs() {
+    if (!fs.existsSync(GLOBAL_ENVS_PATH)) {
         try {
-            // 确保 .claude 目录存在
-            const dir = path.dirname(configPath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
-            console.log(`已初始化: ${configPath}`);
-
-            // 项目模式下：添加到 .gitignore
-            if (currentScope === 'project') {
-                const wsRoot = getWorkspaceRoot();
-                if (wsRoot) {
-                    addToGitignore(wsRoot);
-                }
-            }
-        }
-        catch (e) {
-            console.error('初始化 envs.json 失败:', e);
-        }
+            const dir = path.dirname(GLOBAL_ENVS_PATH);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            writeJSON(GLOBAL_ENVS_PATH, { presets: DEFAULT_PRESETS });
+        } catch (e) { console.error('初始化 envs.json 失败:', e); }
     }
 }
 
-// 初始化项目级配置（创建 .claude/settings.json）
-async function initProjectConfig() {
-    const wsRoot = getWorkspaceRoot();
-    if (!wsRoot) {
-        vscode.window.showWarningMessage('请先打开一个项目文件夹');
-        return;
+function getAllPresets() {
+    const config = readJSON(GLOBAL_ENVS_PATH);
+    return (config && config.presets) || DEFAULT_PRESETS;
+}
+
+function matchPreset(baseUrl) {
+    const presets = getAllPresets();
+    return presets.find(p => p.env.ANTHROPIC_BASE_URL === baseUrl) || null;
+}
+
+// ==================== 配置读取 ====================
+function getGlobalPreset() {
+    const settings = readJSON(GLOBAL_SETTINGS_PATH);
+    const baseUrl = settings?.env?.ANTHROPIC_BASE_URL || '';
+    return matchPreset(baseUrl);
+}
+
+function getProjectPreset(wsRoot) {
+    const projectPath = getProjectSettingsPath(wsRoot);
+    if (!projectPath || !fs.existsSync(projectPath)) return null;
+    const settings = readJSON(projectPath);
+    const baseUrl = settings?.env?.ANTHROPIC_BASE_URL || '';
+    return matchPreset(baseUrl);
+}
+
+/** 获取当前生效的模型来源 */
+function getActiveModel(wsRoot) {
+    const projectPreset = getProjectPreset(wsRoot);
+    if (projectPreset) {
+        return { preset: projectPreset, source: 'project' };
     }
+    const globalPreset = getGlobalPreset();
+    return { preset: globalPreset, source: 'followGlobal' };
+}
 
-    // 强制切换到项目模式
-    currentScope = 'project';
-    await extensionContext.globalState.update('ccSwitch.scope', currentScope);
+// ==================== 配置写入 ====================
+async function switchGlobalPreset(preset) {
+    const settings = readJSON(GLOBAL_SETTINGS_PATH) || {};
+    settings.env = { ...preset.env };
+    writeJSON(GLOBAL_SETTINGS_PATH, settings);
+    vscode.window.showInformationMessage(`全局模型已切换为: ${preset.label}`);
+}
 
-    const projectSettingsPath = path.join(wsRoot, '.claude', 'settings.json');
-    const projectEnvsPath = path.join(wsRoot, '.claude', 'envs.json');
-
-    // 检查是否已存在
-    if (fs.existsSync(projectSettingsPath)) {
-        const result = await vscode.window.showWarningMessage(
-            '项目已存在 .claude/settings.json，是否覆盖？',
-            '覆盖', '取消'
-        );
-        if (result !== '覆盖') return;
-    }
-
-    // 从全局设置复制当前配置
-    const globalSettings = readSettingsRaw(path.join(os.homedir(), '.claude', 'settings.json'));
-
-    // 创建项目级配置
-    const dir = path.dirname(projectSettingsPath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-
-    // 写入 settings.json
-    fs.writeFileSync(projectSettingsPath, JSON.stringify(globalSettings || { env: {} }, null, 2), 'utf-8');
-
-    // 从全局 envs.json 读取预设，写入项目级 envs.json
-    const globalEnvs = readGlobalEnvs();
-    const presets = (globalEnvs && globalEnvs.presets)
-        ? globalEnvs.presets
-        : DEFAULT_PRESETS;
-    fs.writeFileSync(projectEnvsPath, JSON.stringify({ presets: presets }, null, 2), 'utf-8');
-
-    // 添加到 .gitignore
+async function switchProjectPreset(wsRoot, preset) {
+    if (!wsRoot) return;
+    const projectPath = getProjectSettingsPath(wsRoot);
+    writeJSON(projectPath, { env: { ...preset.env } });
     addToGitignore(wsRoot);
-
-    updateStatusBar();
-    vscode.window.showInformationMessage(
-        `✅ 项目级配置已初始化！\n📁 ${projectSettingsPath}\n📁 ${projectEnvsPath}\n📝 已添加到 .gitignore`
-    );
+    vscode.window.showInformationMessage(`项目模型已设置为: ${preset.label}`);
 }
 
-// 确保 .claude 配置文件被 .gitignore 排除
+async function restoreFollowGlobal(wsRoot) {
+    if (!wsRoot) return;
+    deleteFile(getProjectSettingsPath(wsRoot));
+    vscode.window.showInformationMessage('项目已恢复跟随全局');
+}
+
+// ==================== .gitignore ====================
 function addToGitignore(wsRoot) {
     const gitignorePath = path.join(wsRoot, '.gitignore');
-    const ignorePatterns = [
+    const patterns = [
         '# Claude Code 配置（含 API Key，不要提交）',
         '.claude/settings.json',
         '.claude/envs.json',
         '.claude/settings.local.json'
     ];
-
-    let gitignoreContent = '';
-    if (fs.existsSync(gitignorePath)) {
-        gitignoreContent = fs.readFileSync(gitignorePath, 'utf-8');
+    let content = '';
+    if (fs.existsSync(gitignorePath)) content = fs.readFileSync(gitignorePath, 'utf-8');
+    const missing = patterns.filter(p => !p.startsWith('#') && !content.includes(p));
+    if (missing.length > 0) {
+        const trailing = content.endsWith('\n') ? '' : '\n';
+        fs.appendFileSync(gitignorePath, trailing + patterns.join('\n') + '\n', 'utf-8');
     }
-
-    // 只追加还不存在的条目
-    const missingPatterns = ignorePatterns.filter(p =>
-        !p.startsWith('#') && !gitignoreContent.includes(p)
-    );
-
-    if (missingPatterns.length > 0) {
-        const trailing = gitignoreContent.endsWith('\n') ? '' : '\n';
-        const newContent = trailing + ignorePatterns.join('\n') + '\n';
-        fs.appendFileSync(gitignorePath, newContent, 'utf-8');
-        console.log(`已更新 .gitignore: ${gitignorePath}`);
-    }
-}
-
-// 读取指定路径的 settings.json
-function readSettingsRaw(settingsPath) {
-    try {
-        if (fs.existsSync(settingsPath)) {
-            const content = fs.readFileSync(settingsPath, 'utf-8');
-            return JSON.parse(content);
-        }
-    }
-    catch { }
-    return {};
-}
-
-// 读取当前作用域的 settings.json
-function readSettings() {
-    return readSettingsRaw(getSettingsPath());
-}
-
-// 写入当前作用域的 settings.json
-function writeSettings(settings) {
-    const settingsPath = getSettingsPath();
-    try {
-        const dir = path.dirname(settingsPath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-        return true;
-    }
-    catch (e) {
-        vscode.window.showErrorMessage(`写入 settings.json 失败: ${e}`);
-        return false;
-    }
-}
-
-// 读取当前作用域的 envs.json
-// 项目模式下如果不存在，自动回退到全局预设
-function readEnvsConfig() {
-    const configPath = getEnvsConfigPath();
-    try {
-        if (fs.existsSync(configPath)) {
-            const content = fs.readFileSync(configPath, 'utf-8');
-            return JSON.parse(content);
-        }
-    }
-    catch { }
-
-    // 项目模式下：回退到全局预设
-    if (currentScope === 'project') {
-        const globalEnvs = readGlobalEnvs();
-        if (globalEnvs && globalEnvs.presets) {
-            return globalEnvs;
-        }
-    }
-    return { presets: DEFAULT_PRESETS };
-}
-
-// ==================== 预设与切换 ====================
-
-// 获取所有预设
-function getAllPresets() {
-    const config = readEnvsConfig();
-    return config.presets || [];
-}
-
-// 获取当前 env 配置的标识
-function getCurrentPresetId() {
-    const settings = readSettings();
-    const baseUrl = settings.env?.ANTHROPIC_BASE_URL || '';
-    const presets = getAllPresets();
-    const matched = presets.find(p => p.env.ANTHROPIC_BASE_URL === baseUrl);
-    return matched?.id || '';
-}
-
-// 切换到指定预设
-async function switchToPreset(preset) {
-    // 项目模式下检查是否有工作区
-    if (currentScope === 'project' && !getWorkspaceRoot()) {
-        vscode.window.showWarningMessage('请先打开一个项目文件夹，或切换到全局模式');
-        return false;
-    }
-
-    const settings = readSettings();
-    settings.env = {};
-    settings.env = { ...preset.env };
-    if (writeSettings(settings)) {
-        updateStatusBar(preset);
-        const scopeName = getScopeLabel();
-        vscode.window.showInformationMessage(`已切换到: ${preset.label}（${scopeName}级）`);
-        return true;
-    }
-    return false;
 }
 
 // ==================== 状态栏 ====================
-
 let statusBarItem;
 
-function updateStatusBar(preset) {
-    if (statusBarItem) {
-        const currentPreset = preset || getCurrentPreset();
-        const scopeIcon = getScopeIcon();
-        const scopeLabel = getScopeLabel();
-        const wsName = getWorkspaceRoot() ? path.basename(getWorkspaceRoot()) : '';
-        const scopeInfo = currentScope === 'project' && wsName ? ` [${wsName}]` : '';
+function updateStatusBar() {
+    if (!statusBarItem) return;
+    const wsRoot = getWorkspaceRoot();
+    const { preset, source } = getActiveModel(wsRoot);
+    const wsName = wsRoot ? path.basename(wsRoot) : '';
+    const label = preset?.label || '未设置';
 
-        statusBarItem.text = `${scopeIcon} ${currentPreset?.label || '未设置'} (${scopeLabel}${scopeInfo})`;
-        statusBarItem.tooltip =
-            `当前配置: ${currentPreset?.label || '未知'}\n` +
-            `${currentPreset?.description || ''}\n` +
-            `作用域: ${scopeLabel}\n` +
-            `配置文件: ${getSettingsPath()}\n\n` +
-            `点击切换配置`;
-        statusBarItem.show();
+    let text, tooltip;
+    if (source === 'project') {
+        text = `$(folder) ${label}`;
+        tooltip = `📂 项目 (${wsName}): ${label}\n📝 项目独立配置\n\n点击切换配置`;
+    } else if (wsRoot) {
+        text = `$(sync) ${label}`;
+        tooltip = `🔄 项目 (${wsName}): 跟随全局 (${label})\n\n点击切换配置`;
+    } else {
+        text = `$(gear) ${label}`;
+        tooltip = `⚙️ 全局: ${label}\n\n点击切换配置`;
+    }
+
+    statusBarItem.text = text;
+    statusBarItem.tooltip = tooltip;
+    statusBarItem.show();
+}
+
+// ==================== 快速操作菜单 ====================
+async function showQuickActions() {
+    const wsRoot = getWorkspaceRoot();
+    const { preset, source } = getActiveModel(wsRoot);
+    const currentDesc = source === 'project'
+        ? `${preset?.label || '未设置'} (项目独立)`
+        : `${preset?.label || '未设置'} (跟随全局)`;
+
+    const actions = [
+        {
+            label: '$(folder) 切换项目模型',
+            description: `为当前项目选择模型（打破跟随）`,
+            action: 'switchProject'
+        },
+        {
+            label: '$(gear) 切换全局模型',
+            description: '设置全局默认模型',
+            action: 'switchGlobal'
+        }
+    ];
+
+    if (source === 'project') {
+        actions.push({
+            label: '$(sync) 恢复跟随全局',
+            description: '删除项目配置，使用全局模型',
+            action: 'followGlobal'
+        });
+    }
+
+    actions.push(
+        { label: '$(server) 打开配置面板', description: '查看所有配置', action: 'showConfig' },
+        { label: '$(edit) 编辑全局预设 (envs.json)', description: '添加/修改模型预设', action: 'editEnvs' }
+    );
+
+    const selected = await vscode.window.showQuickPick(actions, {
+        placeHolder: `当前: ${currentDesc}`
+    });
+    if (!selected) return;
+
+    switch (selected.action) {
+        case 'switchProject': await selectProjectModel(); break;
+        case 'switchGlobal': await selectGlobalModel(); break;
+        case 'followGlobal': await restoreFollowGlobal(wsRoot); updateStatusBar(); break;
+        case 'showConfig': showConfigPanel(); break;
+        case 'editEnvs':
+            vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_ENVS_PATH));
+            break;
     }
 }
 
-function getCurrentPreset() {
-    const currentId = getCurrentPresetId();
+// ==================== 切换模型 ====================
+async function selectGlobalModel() {
+    const globalPreset = getGlobalPreset();
     const presets = getAllPresets();
-    return presets.find(p => p.id === currentId);
-}
-
-// ==================== 命令实现 ====================
-
-async function selectEnv() {
-    if (currentScope === 'project' && !getWorkspaceRoot()) {
-        vscode.window.showWarningMessage('请先打开一个项目文件夹，或切换到全局模式');
-        return;
-    }
-
-    const currentId = getCurrentPresetId();
-    const presets = getAllPresets();
-    const scopeLabel = getScopeLabel();
-
     const items = [
-        { label: `选择环境配置（当前: ${scopeLabel}级）`, kind: vscode.QuickPickItemKind.Separator },
+        { label: '选择全局模型', kind: vscode.QuickPickItemKind.Separator },
         ...presets.map(p => ({
             label: p.label,
             description: p.description,
             detail: p.env.ANTHROPIC_BASE_URL,
-            picked: p.id === currentId
+            picked: globalPreset?.id === p.id
         }))
     ];
-
     const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: `当前: ${getCurrentPreset()?.label || '未知'}（${scopeLabel}级）`,
-        matchOnDescription: true,
-        matchOnDetail: true
+        placeHolder: `当前全局: ${globalPreset?.label || '未设置'}`,
+        matchOnDescription: true, matchOnDetail: true
     });
-
     if (!selected) return;
-
     const preset = presets.find(p => p.label === selected.label);
-    if (preset) {
-        await switchToPreset(preset);
-    }
+    if (preset) { await switchGlobalPreset(preset); updateStatusBar(); }
 }
 
-function showConfigPanel() {
-    if (currentScope === 'project' && !getWorkspaceRoot()) {
-        vscode.window.showWarningMessage('请先打开一个项目文件夹，或切换到全局模式');
-        return;
-    }
+async function selectProjectModel() {
+    const wsRoot = getWorkspaceRoot();
+    if (!wsRoot) { vscode.window.showWarningMessage('请先打开一个项目'); return; }
 
-    const currentPreset = getCurrentPreset();
+    const projectPreset = getProjectPreset(wsRoot);
     const presets = getAllPresets();
-    const scopeLabel = getScopeLabel();
-    const settingsPath = getSettingsPath();
+    const items = [
+        { label: `为项目选择模型`, kind: vscode.QuickPickItemKind.Separator },
+        ...presets.map(p => ({
+            label: p.label,
+            description: p.description,
+            detail: p.env.ANTHROPIC_BASE_URL,
+            picked: projectPreset?.id === p.id
+        }))
+    ];
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `当前项目: ${projectPreset?.label || '未设置（跟随全局）'}`,
+        matchOnDescription: true, matchOnDetail: true
+    });
+    if (!selected) return;
+    const preset = presets.find(p => p.label === selected.label);
+    if (preset) { await switchProjectPreset(wsRoot, preset); updateStatusBar(); }
+}
+
+// ==================== 配置面板 ====================
+function showConfigPanel() {
+    const wsRoot = getWorkspaceRoot();
+    const { preset: activePreset, source } = getActiveModel(wsRoot);
+    const globalPreset = getGlobalPreset();
+    const projectPreset = getProjectPreset(wsRoot);
+    const presets = getAllPresets();
 
     const panel = vscode.window.createWebviewPanel(
-        'ccSwitchConfig',
-        `Claude Code 环境配置（${scopeLabel}级）`,
-        vscode.ViewColumn.One,
+        'ccSwitchConfig', 'Claude Code 模型配置', vscode.ViewColumn.One,
         { enableScripts: true, retainContextWhenHidden: true }
     );
 
-    panel.webview.html = getConfigHtml(currentPreset, presets, scopeLabel, settingsPath);
+    panel.webview.html = renderPanel({ globalPreset, projectPreset, activePreset, source, presets, wsRoot });
+
     panel.webview.onDidReceiveMessage(async (message) => {
-        if (message.command === 'switch') {
+        if (message.command === 'switchGlobal') {
             const preset = presets.find(p => p.id === message.presetId);
-            if (preset && await switchToPreset(preset)) {
-                panel.webview.html = getConfigHtml(preset, getAllPresets(), getScopeLabel(), getSettingsPath());
+            if (preset) { await switchGlobalPreset(preset); updateStatusBar(); }
+            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+        }
+        if (message.command === 'switchProject') {
+            const preset = presets.find(p => p.id === message.presetId);
+            if (preset && wsRoot) { await switchProjectPreset(wsRoot, preset); updateStatusBar(); }
+            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+        }
+        if (message.command === 'followGlobal') {
+            if (wsRoot) { await restoreFollowGlobal(wsRoot); updateStatusBar(); }
+            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+        }
+        if (message.command === 'editSettings') {
+            vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_SETTINGS_PATH));
+        }
+        if (message.command === 'editEnvs') {
+            vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_ENVS_PATH));
+        }
+        if (message.command === 'editProjectSettings') {
+            if (wsRoot) {
+                const pPath = getProjectSettingsPath(wsRoot);
+                vscode.commands.executeCommand('vscode.open', vscode.Uri.file(pPath));
             }
-        }
-        else if (message.command === 'edit') {
-            vscode.commands.executeCommand('vscode.open', vscode.Uri.file(getSettingsPath()));
-        }
-        else if (message.command === 'openEnvs') {
-            vscode.commands.executeCommand('vscode.open', vscode.Uri.file(getEnvsConfigPath()));
         }
     });
 }
@@ -502,364 +359,154 @@ function maskValue(key, value) {
     return value || '(未设置)';
 }
 
-function getConfigHtml(currentPreset, presets, scopeLabel, settingsPath) {
-    const presetsHtml = presets.map(p => {
-        const isActive = currentPreset?.id === p.id;
-        return `
-		<div class="preset ${isActive ? 'active' : ''}" onclick="switchPreset('${p.id}')">
-			<div class="preset-header">
-				<div class="preset-name">${p.label}</div>
-				${isActive ? '<div class="preset-badge">当前</div>' : ''}
-			</div>
-			<div class="preset-desc">${p.description}</div>
-			<div class="preset-url">${p.env.ANTHROPIC_BASE_URL || '未设置 URL'}</div>
-		</div>
-	`;
-    }).join('');
+function presetHtml(p, isActive, clickFn) {
+    return `
+    <div class="preset ${isActive ? 'active' : ''}" onclick="${clickFn}('${p.id}')">
+        <div class="preset-header">
+            <div class="preset-name">${p.label}</div>
+            ${isActive ? '<div class="badge-active">当前</div>' : ''}
+        </div>
+        <div class="preset-desc">${p.description}</div>
+    </div>`;
+}
 
-    const envKeys = currentPreset ? Object.keys(currentPreset.env) : [];
-    const envHtml = envKeys.map(key => `
-		<div class="env-item">
-			<div class="env-key">${key}</div>
-			<div class="env-value">${maskValue(key, currentPreset.env[key])}</div>
-		</div>
-	`).join('');
+function envListHtml(preset) {
+    if (!preset) return '<div style="color:var(--vscode-descriptionForeground)">未设置</div>';
+    return Object.keys(preset.env).map(key => `
+        <div class="env-item">
+            <div class="env-key">${key}</div>
+            <div class="env-value">${maskValue(key, preset.env[key])}</div>
+        </div>`).join('');
+}
+
+function renderPanel(data) {
+    const { globalPreset, projectPreset, activePreset, source, presets, wsRoot } = data;
+    const globalHtml = presets.map(p => presetHtml(p, globalPreset?.id === p.id, 'switchGlobal')).join('');
+    const projectHtml = wsRoot
+        ? `<div class="follow-item ${!projectPreset ? 'active' : ''}" onclick="followGlobal()">
+                <div class="follow-name">🔄 跟随全局</div>
+                ${!projectPreset ? '<div class="badge-active">当前</div>' : ''}
+                <div class="follow-desc">使用全局模型: ${globalPreset?.label || '未设置'}</div>
+           </div>` +
+          presets.map(p => presetHtml(p, projectPreset?.id === p.id, 'switchProject')).join('')
+        : '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>';
+
+    const sourceText = source === 'project' ? `📂 项目独立 (${path.basename(wsRoot || '')})` : `🔄 跟随全局 (${globalPreset?.label || '未设置'})`;
 
     return `<!DOCTYPE html>
 <html>
 <head>
-	<style>
-		* { box-sizing: border-box; }
-		body {
-			font-family: var(--vscode-font-family);
-			padding: 20px;
-			color: var(--vscode-foreground);
-			background-color: var(--vscode-editor-background);
-			margin: 0;
-		}
-		.container { max-width: 700px; margin: 0 auto; }
-		h2 {
-			margin-bottom: 5px;
-			font-size: 18px;
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-		.subtitle {
-			font-size: 12px;
-			color: var(--vscode-descriptionForeground);
-			margin-bottom: 20px;
-		}
-		.scope-badge {
-			display: inline-block;
-			background: var(--vscode-badge-background);
-			color: var(--vscode-badge-foreground);
-			font-size: 11px;
-			padding: 2px 8px;
-			border-radius: 10px;
-			margin-left: 8px;
-		}
-		.current {
-			background: var(--vscode-editor-selectionBackground);
-			padding: 16px;
-			border-radius: 8px;
-			margin-bottom: 20px;
-		}
-		.current-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			margin-bottom: 12px;
-		}
-		.current-title {
-			font-size: 11px;
-			color: var(--vscode-descriptionForeground);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-		}
-		.current-label {
-			font-size: 18px;
-			font-weight: 600;
-		}
-		.env-list {
-			display: grid;
-			gap: 8px;
-			margin-top: 12px;
-		}
-		.env-item {
-			display: grid;
-			grid-template-columns: 200px 1fr;
-			gap: 12px;
-			font-size: 12px;
-		}
-		.env-key {
-			color: var(--vscode-textLink-foreground);
-			font-family: var(--vscode-editor-font-family);
-		}
-		.env-value {
-			color: var(--vscode-foreground);
-			font-family: var(--vscode-editor-font-family);
-			word-break: break-all;
-		}
-		.section-title {
-			font-size: 13px;
-			font-weight: 600;
-			margin-bottom: 12px;
-			color: var(--vscode-foreground);
-		}
-		.presets {
-			display: grid;
-			gap: 10px;
-		}
-		.preset {
-			background: var(--vscode-editor-background);
-			border: 1px solid var(--vscode-panel-border);
-			border-radius: 6px;
-			padding: 12px;
-			cursor: pointer;
-			transition: all 0.15s ease;
-		}
-		.preset:hover {
-			background: var(--vscode-editor-inactiveSelectionBackground);
-			border-color: var(--vscode-focusBorder);
-		}
-		.preset.active {
-			background: var(--vscode-editor-selectionBackground);
-			border-color: var(--vscode-focusBorder);
-		}
-		.preset-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
-		.preset-name {
-			font-weight: 600;
-			font-size: 14px;
-		}
-		.preset-badge {
-			background: var(--vscode-textLink-foreground);
-			color: var(--vscode-editor-background);
-			font-size: 10px;
-			padding: 2px 6px;
-			border-radius: 3px;
-		}
-		.preset-desc {
-			font-size: 12px;
-			color: var(--vscode-descriptionForeground);
-			margin: 4px 0;
-		}
-		.preset-url {
-			font-size: 11px;
-			color: var(--vscode-textLink-foreground);
-			font-family: var(--vscode-editor-font-family);
-		}
-		.buttons {
-			display: flex;
-			gap: 10px;
-			margin-top: 20px;
-		}
-		button {
-			flex: 1;
-			padding: 10px 16px;
-			border: none;
-			cursor: pointer;
-			font-size: 13px;
-			border-radius: 4px;
-			font-family: var(--vscode-font-family);
-		}
-		.edit-btn {
-			background-color: var(--vscode-button-secondaryBackground);
-			color: var(--vscode-button-secondaryForeground);
-		}
-		.edit-btn:hover {
-			background-color: var(--vscode-button-secondaryHoverBackground);
-		}
-		.envs-btn {
-			background-color: transparent;
-			border: 1px solid var(--vscode-panel-border);
-			color: var(--vscode-foreground);
-		}
-		.envs-btn:hover {
-			background-color: var(--vscode-editor-inactiveSelectionBackground);
-		}
-	</style>
+<style>
+    * { box-sizing: border-box; }
+    body { font-family: var(--vscode-font-family); padding: 20px; color: var(--vscode-foreground);
+           background: var(--vscode-editor-background); margin: 0; }
+    .container { max-width: 700px; margin: 0 auto; }
+    h2 { font-size: 18px; display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+    .subtitle { font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 20px; }
+    .section { margin-bottom: 24px; }
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .current-box { background: var(--vscode-editor-selectionBackground); padding: 16px;
+                   border-radius: 8px; margin-bottom: 20px; }
+    .current-label { font-size: 18px; font-weight: 600; }
+    .current-source { font-size: 12px; margin-top: 4px; }
+    .badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+             font-size: 10px; padding: 2px 8px; border-radius: 8px; }
+    .badge-active { background: var(--vscode-textLink-foreground); color: var(--vscode-editor-background);
+                    font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+    .presets { display: grid; gap: 6px; }
+    .preset { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+              border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.15s; }
+    .preset:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
+    .preset.active { background: var(--vscode-editor-selectionBackground); border-color: var(--vscode-focusBorder); }
+    .preset-header { display: flex; justify-content: space-between; align-items: center; }
+    .preset-name { font-weight: 600; font-size: 14px; }
+    .preset-desc { font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+    .follow-item { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+                   border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.15s;
+                   display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .follow-item:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
+    .follow-item.active { background: var(--vscode-editor-selectionBackground); border-color: var(--vscode-focusBorder); }
+    .follow-name { font-weight: 600; font-size: 14px; }
+    .follow-desc { font-size: 11px; color: var(--vscode-descriptionForeground); }
+    .env-item { display: grid; grid-template-columns: 220px 1fr; gap: 12px; font-size: 12px; margin-bottom: 4px; }
+    .env-key { color: var(--vscode-textLink-foreground); font-family: var(--vscode-editor-font-family); }
+    .env-value { font-family: var(--vscode-editor-font-family); word-break: break-all; }
+    .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+    .btn { padding: 10px 16px; border: none; cursor: pointer; font-size: 13px;
+           border-radius: 4px; font-family: var(--vscode-font-family); }
+    .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    .btn-outline { background: transparent; border: 1px solid var(--vscode-panel-border); color: var(--vscode-foreground); }
+    .btn-outline:hover { background: var(--vscode-editor-inactiveSelectionBackground); }
+</style>
 </head>
 <body>
-	<div class="container">
-		<h2><span style="font-size: 20px;">🔧</span> Claude Code 环境配置
-			<span class="scope-badge">${scopeLabel}级</span>
-		</h2>
-		<div class="subtitle">配置文件: ${settingsPath}</div>
+<div class="container">
+    <h2>🔧 Claude Code 模型配置</h2>
+    <div class="subtitle">全局 + 项目双模式</div>
 
-		${currentPreset ? `
-		<div class="current">
-			<div class="current-header">
-				<div>
-					<div class="current-title">当前配置</div>
-					<div class="current-label">${currentPreset.label}</div>
-				</div>
-			</div>
-			<div class="env-list">
-				${envHtml}
-			</div>
-		</div>
-		` : ''}
+    <div class="current-box">
+        <div style="font-size:11px;color:var(--vscode-descriptionForeground);text-transform:uppercase;">当前生效</div>
+        <div class="current-label">${activePreset?.label || '未设置'}</div>
+        <div class="current-source">${sourceText}</div>
+    </div>
 
-		<div class="section-title">配置预设</div>
-		<div class="presets">
-			${presetsHtml}
-		</div>
+    <div class="section">
+        <div class="section-title">⚙️ 全局模型 <span class="badge">所有项目默认</span></div>
+        <div class="presets">${globalHtml}</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--vscode-descriptionForeground)">环境变量:</div>
+        <div style="padding-left:12px">${envListHtml(globalPreset)}</div>
+    </div>
 
-		<div class="buttons">
-			<button class="edit-btn" onclick="editSettings()">编辑 settings.json</button>
-			<button class="envs-btn" onclick="openEnvsConfig()">编辑预设配置</button>
-		</div>
-	</div>
+    <div class="section">
+        <div class="section-title">📂 项目模型 ${wsRoot ? `<span class="badge">${path.basename(wsRoot)}</span>` : ''}</div>
+        ${wsRoot ? `<div class="presets">${projectHtml}</div>`
+            : '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>'}
+    </div>
 
-	<script>
-		const vscode = acquireVsCodeApi();
-
-		function switchPreset(presetId) {
-			vscode.postMessage({ command: 'switch', presetId: presetId });
-		}
-
-		function editSettings() {
-			vscode.postMessage({ command: 'edit' });
-		}
-
-		function openEnvsConfig() {
-			vscode.postMessage({ command: 'openEnvs' });
-		}
-	</script>
+    <div class="btn-row">
+        <button class="btn btn-secondary" onclick="editSettings()">编辑全局 settings.json</button>
+        <button class="btn btn-outline" onclick="editEnvs()">编辑预设 (envs.json)</button>
+        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目 settings.json</button>' : ''}
+    </div>
+</div>
+<script>
+const vscode = acquireVsCodeApi();
+function switchGlobal(id) { vscode.postMessage({command:'switchGlobal',presetId:id}); }
+function switchProject(id) { vscode.postMessage({command:'switchProject',presetId:id}); }
+function followGlobal() { vscode.postMessage({command:'followGlobal'}); }
+function editSettings() { vscode.postMessage({command:'editSettings'}); }
+function editEnvs() { vscode.postMessage({command:'editEnvs'}); }
+function editProjectSettings() { vscode.postMessage({command:'editProjectSettings'}); }
+</script>
 </body>
 </html>`;
 }
 
-// ==================== 插件激活 ====================
-
+// ==================== 激活 ====================
 function activate(context) {
-    console.log('=== Claude Code Env Switcher (Patched) 正在激活 ===');
     extensionContext = context;
+    initGlobalEnvs();
 
-    // 恢复上次使用的作用域
-    const savedScope = context.globalState.get('ccSwitch.scope', 'project');
-    currentScope = savedScope;
-    console.log(`当前作用域: ${currentScope}`);
-
-    // 初始化默认配置文件
-    initDefaultEnvsConfig();
-    // 如果项目模式，也初始化项目级 envs.json
-    if (currentScope === 'project' && getWorkspaceRoot()) {
-        initDefaultEnvsConfig();
-    }
-
-    // 创建状态栏项
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    updateStatusBar();
     statusBarItem.command = 'ccSwitch.showQuickActions';
-    context.subscriptions.push(statusBarItem);
+    updateStatusBar();
     statusBarItem.show();
+    context.subscriptions.push(statusBarItem);
 
-    // 注册命令
-    const selectCommand = vscode.commands.registerCommand('ccSwitch.selectEnv', selectEnv);
-    context.subscriptions.push(selectCommand);
+    context.subscriptions.push(vscode.commands.registerCommand('ccSwitch.selectEnv', showQuickActions));
+    context.subscriptions.push(vscode.commands.registerCommand('ccSwitch.showConfig', showConfigPanel));
+    context.subscriptions.push(vscode.commands.registerCommand('ccSwitch.editSettings', () => {
+        vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_SETTINGS_PATH));
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('ccSwitch.editEnvs', () => {
+        vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_ENVS_PATH));
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('ccSwitch.showQuickActions', showQuickActions));
 
-    const configCommand = vscode.commands.registerCommand('ccSwitch.showConfig', showConfigPanel);
-    context.subscriptions.push(configCommand);
-
-    const editCommand = vscode.commands.registerCommand('ccSwitch.editSettings', () => {
-        vscode.commands.executeCommand('vscode.open', vscode.Uri.file(getSettingsPath()));
-    });
-    context.subscriptions.push(editCommand);
-
-    const envsCommand = vscode.commands.registerCommand('ccSwitch.editEnvs', () => {
-        vscode.commands.executeCommand('vscode.open', vscode.Uri.file(getEnvsConfigPath()));
-    });
-    context.subscriptions.push(envsCommand);
-
-    // ⭐ 新增：切换作用域
-    const toggleCommand = vscode.commands.registerCommand('ccSwitch.toggleScope', toggleScope);
-    context.subscriptions.push(toggleCommand);
-
-    // ⭐ 新增：初始化项目配置
-    const initCommand = vscode.commands.registerCommand('ccSwitch.initProjectConfig', initProjectConfig);
-    context.subscriptions.push(initCommand);
-
-    // 快速操作菜单
-    const quickActionsCommand = vscode.commands.registerCommand('ccSwitch.showQuickActions', async () => {
-        const scopeLabel = getScopeLabel();
-        const actions = [
-            {
-                label: `$(server) 打开环境配置面板`,
-                description: `查看当前配置和所有预设（${scopeLabel}级）`,
-                action: 'showConfig'
-            },
-            {
-                label: '$(arrow-swap) 切换环境配置',
-                description: `快速切换到其他环境预设（${scopeLabel}级）`,
-                action: 'selectEnv'
-            },
-            {
-                label: getScopeIcon() === '$(folder)'
-                    ? '$(folder) 切换到全局配置'
-                    : '$(gear) 切换到项目级配置',
-                description: `当前: ${scopeLabel}级 → 切换到${scopeLabel === '全局' ? '项目' : '全局'}级`,
-                action: 'toggleScope'
-            },
-            {
-                label: '$(new-file) 初始化项目级配置',
-                description: '在项目根目录创建 .claude/ 配置',
-                action: 'initProjectConfig'
-            },
-            {
-                label: '$(edit) 编辑环境预设 (envs.json)',
-                description: '修改环境变量配置',
-                action: 'editEnvs'
-            },
-            {
-                label: '$(settings-edit) 编辑 Claude Code 设置 (settings.json)',
-                description: `修改 Claude Code 配置（${scopeLabel}级）`,
-                action: 'editSettings'
-            }
-        ];
-
-        const selected = await vscode.window.showQuickPick(actions, {
-            placeHolder: `当前配置: ${getCurrentPreset()?.label || '未设置'}（${scopeLabel}级）`
-        });
-
-        if (selected) {
-            switch (selected.action) {
-                case 'showConfig':
-                    vscode.commands.executeCommand('ccSwitch.showConfig');
-                    break;
-                case 'selectEnv':
-                    vscode.commands.executeCommand('ccSwitch.selectEnv');
-                    break;
-                case 'toggleScope':
-                    vscode.commands.executeCommand('ccSwitch.toggleScope');
-                    break;
-                case 'initProjectConfig':
-                    vscode.commands.executeCommand('ccSwitch.initProjectConfig');
-                    break;
-                case 'editEnvs':
-                    vscode.commands.executeCommand('ccSwitch.editEnvs');
-                    break;
-                case 'editSettings':
-                    vscode.commands.executeCommand('ccSwitch.editSettings');
-                    break;
-            }
-        }
-    });
-    context.subscriptions.push(quickActionsCommand);
-
-    // 监听工作区变化，更新状态栏
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            updateStatusBar();
-        })
+        vscode.workspace.onDidChangeWorkspaceFolders(() => updateStatusBar())
     );
 }
 
 function deactivate() { }
-
-//# sourceMappingURL=extension.js.map

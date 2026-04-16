@@ -2,7 +2,7 @@
 	"name": "claude-code-model-switch",
 	"displayName": "Claude Code Model Switch",
 	"description": "为 Claude Code 提供全局和项目级模型一键切换。支持 Anthropic 官方 API、智谱 GLM、Kimi、MiniMax、DeepSeek 等任意兼容 Anthropic 协议的 API 提供商。可按项目独立配置模型和环境变量，互不干扰。",
-	"version": "1.0.0",
+	"version": "2.1.0",
 	"publisher": "overcast404",
 	"repository": {
 		"type": "git",
@@ -40,33 +40,23 @@
 		"commands": [
 			{
 				"command": "ccSwitch.selectEnv",
-				"title": "切换 Claude Code 环境配置",
-				"category": "Claude Code Switch"
+				"title": "切换模型",
+				"category": "Claude Code Model Switch"
 			},
 			{
 				"command": "ccSwitch.showConfig",
-				"title": "打开环境配置面板",
-				"category": "Claude Code Switch"
+				"title": "打开配置面板",
+				"category": "Claude Code Model Switch"
 			},
 			{
 				"command": "ccSwitch.editSettings",
-				"title": "编辑 settings.json",
-				"category": "Claude Code Switch"
+				"title": "编辑全局 settings.json",
+				"category": "Claude Code Model Switch"
 			},
 			{
 				"command": "ccSwitch.editEnvs",
-				"title": "编辑环境预设配置",
-				"category": "Claude Code Switch"
-			},
-			{
-				"command": "ccSwitch.toggleScope",
-				"title": "切换配置作用域（全局/项目）",
-				"category": "Claude Code Switch"
-			},
-			{
-				"command": "ccSwitch.initProjectConfig",
-				"title": "初始化项目级配置",
-				"category": "Claude Code Switch"
+				"title": "编辑全局预设 (envs.json)",
+				"category": "Claude Code Model Switch"
 			}
 		]
 	},
