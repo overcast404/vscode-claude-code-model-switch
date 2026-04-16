@@ -1,0 +1,68 @@
+{
+  "presets": [
+    {
+      "id": "qwen",
+      "label": "cc:qwen3.6-plus",
+      "description": "阿里云 DashScope qwen3.6-plus 模型",
+      "env": {
+        "ANTHROPIC_AUTH_TOKEN": "your-api-key-here",
+        "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "API_TIMEOUT_MS": "300000",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "ANTHROPIC_MODEL": "qwen3.6-plus",
+        "ANTHROPIC_SMALL_FAST_MODEL": "qwen3.6-plus",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.6-plus",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.6-plus",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.6-plus"
+      }
+    },
+    {
+      "id": "glm5",
+      "label": "cc:GLM-5",
+      "description": "阿里云 DashScope GLM-5 模型",
+      "env": {
+        "ANTHROPIC_AUTH_TOKEN": "your-api-key-here",
+        "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "API_TIMEOUT_MS": "300000",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "ANTHROPIC_MODEL": "glm-5",
+        "ANTHROPIC_SMALL_FAST_MODEL": "glm-5",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5"
+      }
+    },
+    {
+      "id": "kimi",
+      "label": "cc:kimi-k2.5",
+      "description": "阿里云 DashScope kimi-k2.5 模型",
+      "env": {
+        "ANTHROPIC_AUTH_TOKEN": "your-api-key-here",
+        "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "API_TIMEOUT_MS": "300000",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "ANTHROPIC_MODEL": "kimi-k2.5",
+        "ANTHROPIC_SMALL_FAST_MODEL": "kimi-k2.5",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k2.5",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k2.5",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k2.5"
+      }
+    },
+    {
+      "id": "minimax",
+      "label": "cc:MiniMax-M2.5",
+      "description": "阿里云 DashScope MiniMax-M2.5 模型",
+      "env": {
+        "ANTHROPIC_AUTH_TOKEN": "your-api-key-here",
+        "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        "API_TIMEOUT_MS": "300000",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "ANTHROPIC_MODEL": "MiniMax-M2.5",
+        "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.5",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2.5",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.5",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.5"
+      }
+    }
+  ]
+}
