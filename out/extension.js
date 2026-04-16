@@ -114,24 +114,24 @@ function getAllPresets() {
     return (config && config.presets) || DEFAULT_PRESETS;
 }
 
-function matchPreset(baseUrl) {
+function matchPreset(presetId) {
     const presets = getAllPresets();
-    return presets.find(p => p.env.ANTHROPIC_BASE_URL === baseUrl) || null;
+    return presets.find(p => p.id === presetId) || null;
 }
 
 // ==================== 配置读取 ====================
 function getGlobalPreset() {
     const settings = readJSON(GLOBAL_SETTINGS_PATH);
-    const baseUrl = settings?.env?.ANTHROPIC_BASE_URL || '';
-    return matchPreset(baseUrl);
+    const presetId = settings?.presetId || '';
+    return matchPreset(presetId);
 }
 
 function getProjectPreset(wsRoot) {
     const projectPath = getProjectSettingsPath(wsRoot);
     if (!projectPath || !fs.existsSync(projectPath)) return null;
     const settings = readJSON(projectPath);
-    const baseUrl = settings?.env?.ANTHROPIC_BASE_URL || '';
-    return matchPreset(baseUrl);
+    const presetId = settings?.presetId || '';
+    return matchPreset(presetId);
 }
 
 /** 获取当前生效的模型来源 */
@@ -148,6 +148,7 @@ function getActiveModel(wsRoot) {
 async function switchGlobalPreset(preset) {
     const settings = readJSON(GLOBAL_SETTINGS_PATH) || {};
     settings.env = { ...preset.env };
+    settings.presetId = preset.id;
     writeJSON(GLOBAL_SETTINGS_PATH, settings);
     vscode.window.showInformationMessage(`全局模型已切换为: ${preset.label}`);
 }
@@ -155,7 +156,7 @@ async function switchGlobalPreset(preset) {
 async function switchProjectPreset(wsRoot, preset) {
     if (!wsRoot) return;
     const projectPath = getProjectSettingsPath(wsRoot);
-    writeJSON(projectPath, { env: { ...preset.env } });
+    writeJSON(projectPath, { env: { ...preset.env }, presetId: preset.id });
     addToGitignore(wsRoot);
     vscode.window.showInformationMessage(`项目模型已设置为: ${preset.label}`);
 }
