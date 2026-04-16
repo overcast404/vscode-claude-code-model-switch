@@ -75,7 +75,7 @@ function getWorkspaceRoot() {
 }
 
 function getProjectSettingsPath(wsRoot) {
-    return wsRoot ? path.join(wsRoot, '.claude', 'settings.json') : null;
+    return wsRoot ? path.join(wsRoot, '.claude', 'settings.local.json') : null;
 }
 
 // ==================== 文件读写 ====================
@@ -156,7 +156,10 @@ async function switchGlobalPreset(preset) {
 async function switchProjectPreset(wsRoot, preset) {
     if (!wsRoot) return;
     const projectPath = getProjectSettingsPath(wsRoot);
-    writeJSON(projectPath, { env: { ...preset.env }, presetId: preset.id });
+    const existing = readJSON(projectPath) || {};
+    existing.env = { ...preset.env };
+    existing.presetId = preset.id;
+    writeJSON(projectPath, existing);
     addToGitignore(wsRoot);
     vscode.window.showInformationMessage(`项目模型已设置为: ${preset.label}`);
 }
@@ -468,7 +471,7 @@ function renderPanel(data) {
     <div class="btn-row">
         <button class="btn btn-secondary" onclick="editSettings()">编辑全局 settings.json</button>
         <button class="btn btn-outline" onclick="editEnvs()">编辑预设 (envs.json)</button>
-        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目 settings.json</button>' : ''}
+        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目 settings.local.json</button>' : ''}
     </div>
 </div>
 <script>
