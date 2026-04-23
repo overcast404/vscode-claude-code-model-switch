@@ -1,27 +1,26 @@
 # Claude Code Model Switch
 
-> 为 Claude Code 提供全局和项目级模型一键切换 🔄
+> 为 Claude Code 提供全局默认模型与项目级独立模型的一键切换。
 
-一款专为 Claude Code 用户打造的模型切换工具。支持在多个 AI 服务商之间快速切换，同时提供**项目级独立配置**——每个项目可以独立选择模型和 API，互不干扰。
-
----
-
-> 💡 **致谢**：本项目基于 [Skyrain](https://marketplace.visualstudio.com/items?itemName=Skyrain.vs-cc-switch) 的 [Claude Code Env Switcher](https://gitcode.com/TogetherAI/vs-cc-switch) 改造而来。感谢原作者的思路和贡献，项目级的全局/作用域切换、自动 gitignore 等增强功能在此基础上新增。原项目采用 MIT 许可证。
+一款专为 Claude Code 用户打造的 VS Code 扩展。它把模型切换拆成两个层级：**全局默认配置**和**项目独立配置**。你可以让项目继续跟随全局，也可以只为当前项目单独指定模型与环境变量，互不干扰。
 
 ---
 
-## ✨ 功能亮点
+> 💡 **致谢**：本项目基于 [Skyrain](https://marketplace.visualstudio.com/items?itemName=Skyrain.vs-cc-switch) 的 [Claude Code Env Switcher](https://gitcode.com/TogetherAI/vs-cc-switch) 改造而来。感谢原作者的思路和贡献；本项目在此基础上补充了全局 / 项目双层配置、跟随全局、自动 `.gitignore` 等能力。原项目采用 MIT 许可证。
 
-| 功能 | 说明 |
-|------|------|
-| 🔄 **一键切换** | 状态栏直接点击，秒级切换模型 |
-| 📂 **项目级配置** | 每个项目独立模型配置，按项目自动隔离 |
-| 🌍 **全局配置** | 所有项目共用一套配置，项目可选择「跟随全局」 |
-| 📊 **可视化面板** | 同时查看全局和项目配置，一目了然 |
-| 🛡️ **自动 .gitignore** | 项目级配置自动加入 gitignore，防止 API Key 泄露 |
-| 🔧 **自定义预设** | 支持任意数量环境预设 |
+---
 
-## 🎯 支持的服务商
+## 核心特性
+
+- **全局默认模型**：所有项目默认读取 `~/.claude/settings.json`
+- **项目独立模型**：当前项目可写入独立配置，覆盖全局默认
+- **共享预设列表**：所有预设统一存放在 `~/.claude/envs.json`
+- **跟随全局**：项目可随时恢复为使用全局默认模型
+- **来源可见**：状态栏会明确显示当前是全局、项目独立、自定义配置还是预设丢失
+- **快速操作**：支持状态栏菜单、配置面板、命令面板三种入口
+- **自动保护敏感文件**：写入项目配置时自动补充 `.gitignore`
+
+## 支持的服务商
 
 - **Anthropic 官方** — claude.ai 订阅 / API Key
 - **阿里云 DashScope** — 通义千问、GLM、Kimi、MiniMax 等
@@ -31,51 +30,161 @@
 - **DeepSeek** — DeepSeek API
 - **任意兼容 Anthropic 协议的 API** — 可自由添加
 
-## 📋 配置架构
+## 配置文件与生效优先级
 
-全局和项目级配置**同时存在**，不需要切换：
+扩展使用三类配置文件：
 
-| 层级 | 配置文件 | 说明 |
+| 层级 | 配置文件 | 作用 |
 |------|---------|------|
-| **全局** | `~/.claude/settings.json` | 始终生效，所有项目默认使用 |
-| **项目** | `{项目}/.claude/settings.json` | 可选覆盖，优先级高于全局 |
-| **预设** | `~/.claude/envs.json` | 全局共享的模型预设列表 |
+| 全局配置 | `~/.claude/settings.json` | 所有项目默认使用的 Claude Code 配置 |
+| 全局预设 | `~/.claude/envs.json` | 全局共享的模型预设列表 |
+| 项目配置 | `{project}/.claude/settings.local.json` | 当前项目的独立配置，优先级高于全局 |
 
-**项目可以选择：**
-- **跟随全局** — 不创建项目配置文件，自动使用全局配置
-- **独立配置** — 为当前项目选择独立的模型，覆盖全局设置
+生效规则如下：
 
-## 🚀 快速开始
+1. 如果项目的 `.claude/settings.local.json` 中存在有效项目配置，则优先使用项目配置。
+2. 如果项目没有有效项目配置，则跟随 `~/.claude/settings.json`。
+3. 预设列表始终来自 `~/.claude/envs.json`，项目不会维护单独的预设列表。
 
-1. 安装插件后，状态栏右侧会显示当前使用的模型
-2. 点击状态栏图标，即可切换模型或进行其他操作
+首次使用时，如果 `~/.claude/envs.json` 不存在，扩展会自动初始化默认预设。
 
-### 典型工作流
+## 2.1.4 的 4 种实际状态
 
-```
-全局设置：cc:GLM-5
+2.1.4 不只是“全局 / 项目”两种模式，实际会区分以下 4 种状态：
 
-项目 A → 跟随全局 → 使用 GLM-5
-项目 B → 独立设置 → cc:Kimi-k2.5
-项目 C → 独立设置 → cc:qwen3.6-plus
+### 1. 跟随全局
 
-每个项目独立决定，互不影响。
-```
+项目没有有效的项目级 `env` 或 `presetId` 时，当前项目直接使用全局配置。
+
+状态栏会显示类似：
+
+- `$(sync) cc:GLM-5 [跟随全局]`
+
+### 2. 项目独立预设
+
+当前项目在 `{project}/.claude/settings.local.json` 中保存了有效的 `presetId`，并且该预设仍能在 `~/.claude/envs.json` 中找到。
+
+状态栏会显示类似：
+
+- `$(folder) cc:Kimi-k2.5 项目(my-project)`
+
+### 3. 项目自定义配置
+
+如果项目配置文件中没有 `presetId`，但存在 `env`，扩展会把它识别为手动维护的自定义配置。
+
+状态栏会显示类似：
+
+- `$(edit) 自定义配置 项目(my-project)`
+
+### 4. 项目预设丢失
+
+如果项目里记录了 `presetId`，但该预设已经不在 `~/.claude/envs.json` 中，同时项目文件仍保留了 `env`，扩展会继续使用这些环境变量，并提示这是“预设丢失”状态。
+
+状态栏会显示类似：
+
+- `$(warning) (预设丢失: xxx) 项目(my-project)`
+
+这意味着：即使某个预设后来被删掉，旧项目也不一定立刻失效；只要项目文件里还保留了对应 `env`，它仍会继续生效。
+
+## 常用操作
+
+### 状态栏
+
+扩展激活后，VS Code 右侧状态栏会显示当前生效模型。显示内容会根据来源变化：
+
+- 无工作区：显示全局模式
+- 有工作区且项目独立：显示项目模式
+- 有工作区但跟随全局：显示 `[跟随全局]`
+- 项目自定义配置或预设丢失：显示特殊标识
+
+点击状态栏即可打开快速操作菜单。
+
+### 快速操作菜单
+
+状态栏菜单支持以下动作：
+
+- **切换项目模型**：为当前项目选择独立预设
+- **切换全局模型**：修改全局默认模型
+- **恢复跟随全局**：移除项目级模型来源，改回使用全局默认配置
+- **打开配置面板**：查看当前生效来源与预设列表
+- **编辑全局预设 (envs.json)**：维护共享预设
+
+### 配置面板
+
+配置面板会同时展示：
+
+- 当前生效的模型
+- 当前来源是全局、项目独立、自定义配置还是预设丢失
+- 全局预设列表
+- 当前项目可选的“跟随全局”与独立预设
+
+面板内还可以直接打开：
+
+- 全局 `settings.json`
+- 全局 `envs.json`
+- 项目 `settings.local.json`
 
 ### 命令面板
 
-按 `Cmd+Shift+P` (macOS) 或 `Ctrl+Shift+P` (Windows/Linux)，搜索 "Claude Code Model Switch"：
+按 `Cmd+Shift+P`（macOS）或 `Ctrl+Shift+P`（Windows/Linux），搜索 `Claude Code Model Switch`，可使用以下命令：
 
 | 命令 | 说明 |
 |------|------|
-| 切换模型 | 为当前项目或全局选择模型 |
-| 打开配置面板 | 同时查看全局和项目配置 |
-| 编辑全局预设 (envs.json) | 添加/修改模型预设 |
+| 切换模型 | 打开模型切换入口 |
+| 打开配置面板 | 查看全局与项目配置 |
 | 编辑全局 settings.json | 直接编辑全局配置 |
+| 编辑全局预设 (envs.json) | 添加或修改共享预设 |
 
-## ⚙️ 配置格式
+## 切换行为说明
 
-预设配置存储在 `~/.claude/envs.json` 中，格式如下：
+### 切换全局模型
+
+切换全局模型时，扩展会把所选预设的 `env` 写入：
+
+- `~/.claude/settings.json`
+
+同时写入对应的 `presetId`，作为全局默认模型来源。
+
+### 切换项目模型
+
+切换项目模型时，扩展会写入：
+
+- `{project}/.claude/settings.local.json`
+
+写入规则不是简单覆盖，而是：
+
+1. 先读取当前项目已有的 `existing.env`
+2. 再用所选预设的 `preset.env` 覆盖同名键
+3. 保存新的 `env` 与 `presetId`
+
+这意味着项目文件中已有的自定义环境变量会尽量保留，而预设中定义的键会以预设值为准。
+
+### 恢复跟随全局
+
+恢复跟随全局时，扩展只会删除项目配置中的：
+
+- `env`
+- `presetId`
+
+其他字段会被保留。如果删除后整个项目配置文件已经为空，扩展才会删除这个文件。
+
+因此，“恢复跟随全局”不等于无条件删除整个 `.claude/settings.local.json`。
+
+## 典型工作流
+
+```text
+全局设置：cc:GLM-5
+
+项目 A → 跟随全局 → 使用 cc:GLM-5
+项目 B → 项目独立 → 使用 cc:Kimi-k2.5
+项目 C → 项目独立 → 使用 cc:MiniMax-M2.5
+```
+
+每个项目都可以独立决定是否覆盖全局默认配置。
+
+## `envs.json` 示例
+
+预设列表存储在 `~/.claude/envs.json` 中，格式如下：
 
 ```json
 {
@@ -110,24 +219,24 @@
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | Opus 模型别名 |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku 模型别名 |
 
-## 🔒 安全
+## 安全与 `.gitignore`
 
-设置项目级配置时，自动将以下内容追加到 `.gitignore`：
+当扩展为项目写入配置时，会自动把以下内容加入项目根目录 `.gitignore`：
 
-```
+```gitignore
 # Claude Code 配置（含 API Key，不要提交）
 .claude/settings.json
 .claude/envs.json
 .claude/settings.local.json
 ```
 
-> ⚠️ 请勿将包含 API Key 的配置文件提交到代码仓库！
+> 请勿将包含 API Key 的配置文件提交到代码仓库。
 
-## 📦 安装
+## 安装
 
 从 VS Code Marketplace 搜索 **Claude Code Model Switch** 安装。
 
-## 📝 开发
+## 开发
 
 ```bash
 git clone https://github.com/overcast404/claude-code-model-switch.git
@@ -137,6 +246,6 @@ npm run compile
 # 按 F5 启动调试
 ```
 
-## 📜 许可证
+## 许可证
 
 MIT
