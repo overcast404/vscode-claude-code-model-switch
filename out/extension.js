@@ -393,12 +393,12 @@ function showConfigPanel() {
 
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'switchGlobal') {
-            const preset = presets.find(p => p.id === message.presetId);
+            const preset = getAllPresets().find(p => p.id === message.presetId);
             if (preset) { await switchGlobalPreset(preset); updateStatusBar(); }
             refreshPanelView(panel, wsRoot);
         }
         if (message.command === 'switchProject') {
-            const preset = presets.find(p => p.id === message.presetId);
+            const preset = getAllPresets().find(p => p.id === message.presetId);
             if (preset && wsRoot) { await switchProjectPreset(wsRoot, preset); updateStatusBar(); }
             refreshPanelView(panel, wsRoot);
         }
