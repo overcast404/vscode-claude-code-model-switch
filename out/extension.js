@@ -502,20 +502,20 @@ function renderPanel(data) {
     * { box-sizing: border-box; }
     body { font-family: var(--vscode-font-family); padding: 16px; color: var(--vscode-foreground);
            background: var(--vscode-editor-background); margin: 0; }
-    .container { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 32px); }
+    .container { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 32px); }
     .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
     .header-title { font-size: 16px; font-weight: 600; }
     .header-current { font-size: 12px; color: var(--vscode-descriptionForeground); }
     .header-current-active { color: var(--vscode-textLink-foreground); font-weight: 500; }
-    .main-content { display: flex; gap: 16px; flex: 1; min-height: 0; }
+    .main-content { display: flex; gap: 16px; min-height: 0; align-items: flex-start; }
     .column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .section { min-height: 0; display: flex; flex-direction: column; }
     .section-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
              font-size: 10px; padding: 2px 6px; border-radius: 8px; }
     .badge-active { background: var(--vscode-textLink-foreground); color: var(--vscode-editor-background);
                     font-size: 10px; padding: 2px 6px; border-radius: 3px; }
-    .presets { display: grid; gap: 4px; flex: 1; overflow-y: auto; }
+    .presets { display: grid; gap: 4px; max-height: 400px; overflow-y: auto; }
     .preset { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
               border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: all 0.15s; }
     .preset:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
