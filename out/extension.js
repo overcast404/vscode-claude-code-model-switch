@@ -436,7 +436,7 @@ function presetHtml(p, isActive, clickFn) {
 }
 
 function envListHtml(preset) {
-    if (!preset) return '<div style="color:var(--vscode-descriptionForeground)">未设置</div>';
+    if (!preset) return '<div class="no-workspace">未设置</div>';
     return Object.keys(preset.env).map(key => `
         <div class="env-item">
             <div class="env-key">${key}</div>
@@ -460,27 +460,27 @@ function renderPanel(data) {
     if (wsRoot) {
         // 孤立配置警告（如果有）
         if (isOrphaned) {
-            projectHtml = `<div class="warning-box" style="background:var(--vscode-inputValidation-warningBackground);border:1px solid var(--vscode-inputValidation-warningBorder);padding:10px;border-radius:4px;margin-bottom:8px;">
-                <div style="font-weight:600;">⚠️ 预设配置丢失</div>
-                <div style="font-size:12px;margin-top:4px;">项目引用的预设 "${projectPreset.id}" 已不存在。环境变量仍在生效。</div>
+            projectHtml = `<div class="warning-box">
+                <div class="warning-title">⚠️ 预设配置丢失</div>
+                <div class="warning-desc">项目引用的预设 "${projectPreset.id}" 已不存在</div>
             </div>`;
         }
         // 自定义配置提示（如果有）
         if (isCustom) {
-            projectHtml = `<div class="info-box" style="background:var(--vscode-editorInfo-background,rgba(0,122,204,0.1));border:1px solid var(--vscode-editorInfo-foreground,rgba(0,122,204,0.5));padding:10px;border-radius:4px;margin-bottom:8px;">
-                <div style="font-weight:600;">📝 自定义配置</div>
-                <div style="font-size:12px;margin-top:4px;">项目使用手动配置的环境变量，未关联预设。</div>
+            projectHtml = `<div class="info-box">
+                <div class="info-title">📝 自定义配置</div>
+                <div class="info-desc">项目使用手动配置的环境变量</div>
             </div>`;
         }
         // 跟随全局选项
         projectHtml += `<div class="follow-item ${isFollowGlobal ? 'active' : ''}" onclick="followGlobal()">
                 <div class="follow-name">🔄 跟随全局</div>
                 ${isFollowGlobal ? '<div class="badge-active">当前</div>' : ''}
-                <div class="follow-desc">使用全局模型: ${globalPreset?.label || '未设置'}</div>
+                <div class="follow-desc">${globalPreset?.label || '未设置'}</div>
            </div>` +
           presets.map(p => presetHtml(p, projectPreset?.id === p.id && !isOrphaned && !isCustom, 'switchProject')).join('');
     } else {
-        projectHtml = '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>';
+        projectHtml = '<div class="no-workspace">请先打开一个项目文件夹</div>';
     }
 
     // sourceText 根据不同状态显示不同文本
@@ -500,41 +500,53 @@ function renderPanel(data) {
 <head>
 <style>
     * { box-sizing: border-box; }
-    body { font-family: var(--vscode-font-family); padding: 20px; color: var(--vscode-foreground);
+    body { font-family: var(--vscode-font-family); padding: 16px; color: var(--vscode-foreground);
            background: var(--vscode-editor-background); margin: 0; }
-    .container { max-width: 700px; margin: 0 auto; }
-    h2 { font-size: 18px; display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
-    .subtitle { font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 20px; }
-    .section { margin-bottom: 24px; }
-    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-    .current-box { background: var(--vscode-editor-selectionBackground); padding: 16px;
-                   border-radius: 8px; margin-bottom: 20px; }
-    .current-label { font-size: 18px; font-weight: 600; }
-    .current-source { font-size: 12px; margin-top: 4px; }
+    .container { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 32px); }
+    .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .header-title { font-size: 16px; font-weight: 600; }
+    .header-current { font-size: 12px; color: var(--vscode-descriptionForeground); }
+    .header-current-active { color: var(--vscode-textLink-foreground); font-weight: 500; }
+    .main-content { display: flex; gap: 16px; flex: 1; min-height: 0; }
+    .column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .section-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
-             font-size: 10px; padding: 2px 8px; border-radius: 8px; }
+             font-size: 10px; padding: 2px 6px; border-radius: 8px; }
     .badge-active { background: var(--vscode-textLink-foreground); color: var(--vscode-editor-background);
                     font-size: 10px; padding: 2px 6px; border-radius: 3px; }
-    .presets { display: grid; gap: 6px; }
+    .presets { display: grid; gap: 4px; flex: 1; overflow-y: auto; }
     .preset { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
-              border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.15s; }
+              border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: all 0.15s; }
     .preset:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
     .preset.active { background: var(--vscode-editor-selectionBackground); border-color: var(--vscode-focusBorder); }
     .preset-header { display: flex; justify-content: space-between; align-items: center; }
-    .preset-name { font-weight: 600; font-size: 14px; }
-    .preset-desc { font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+    .preset-name { font-weight: 600; font-size: 13px; }
+    .preset-desc { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
     .follow-item { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
-                   border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.15s;
-                   display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+                   border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: all 0.15s;
+                   display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .follow-item:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
     .follow-item.active { background: var(--vscode-editor-selectionBackground); border-color: var(--vscode-focusBorder); }
-    .follow-name { font-weight: 600; font-size: 14px; }
+    .follow-name { font-weight: 600; font-size: 13px; }
     .follow-desc { font-size: 11px; color: var(--vscode-descriptionForeground); }
-    .env-item { display: grid; grid-template-columns: 220px 1fr; gap: 12px; font-size: 12px; margin-bottom: 4px; }
-    .env-key { color: var(--vscode-textLink-foreground); font-family: var(--vscode-editor-font-family); }
+    .env-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--vscode-panel-border); }
+    .env-title { font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .env-list { max-height: 100px; overflow-y: auto; }
+    .env-item { display: flex; gap: 8px; font-size: 11px; margin-bottom: 2px; }
+    .env-key { color: var(--vscode-textLink-foreground); font-family: var(--vscode-editor-font-family); min-width: 180px; }
     .env-value { font-family: var(--vscode-editor-font-family); word-break: break-all; }
-    .btn-row { display: flex; gap: 10px; margin-top: 16px; }
-    .btn { padding: 10px 16px; border: none; cursor: pointer; font-size: 13px;
+    .warning-box { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder);
+                   padding: 8px; border-radius: 4px; margin-bottom: 6px; }
+    .warning-title { font-weight: 600; font-size: 12px; }
+    .warning-desc { font-size: 11px; margin-top: 2px; color: var(--vscode-descriptionForeground); }
+    .info-box { background: var(--vscode-editorInfo-background,rgba(0,122,204,0.1)); border: 1px solid var(--vscode-editorInfo-foreground,rgba(0,122,204,0.5));
+                padding: 8px; border-radius: 4px; margin-bottom: 6px; }
+    .info-title { font-weight: 600; font-size: 12px; }
+    .info-desc { font-size: 11px; margin-top: 2px; color: var(--vscode-descriptionForeground); }
+    .no-workspace { color: var(--vscode-descriptionForeground); padding: 12px; text-align: center; }
+    .btn-row { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--vscode-panel-border); }
+    .btn { padding: 8px 12px; border: none; cursor: pointer; font-size: 12px;
            border-radius: 4px; font-family: var(--vscode-font-family); }
     .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
@@ -544,32 +556,38 @@ function renderPanel(data) {
 </head>
 <body>
 <div class="container">
-    <h2>🔧 Claude Code 模型配置</h2>
-    <div class="subtitle">全局 + 项目双模式</div>
-
-    <div class="current-box">
-        <div style="font-size:11px;color:var(--vscode-descriptionForeground);text-transform:uppercase;">当前生效</div>
-        <div class="current-label">${activePreset?.label || '未设置'}</div>
-        <div class="current-source">${sourceText}</div>
+    <div class="header">
+        <div class="header-title">Claude Code 模型配置</div>
+        <div class="header-current">
+            当前: <span class="header-current-active">${activePreset?.label || '未设置'}</span>
+            <span style="margin-left:6px;">${sourceText}</span>
+        </div>
     </div>
 
-    <div class="section">
-        <div class="section-title">⚙️ 全局模型 <span class="badge">所有项目默认</span></div>
-        <div class="presets">${globalHtml}</div>
-        <div style="margin-top:8px;font-size:11px;color:var(--vscode-descriptionForeground)">环境变量:</div>
-        <div style="padding-left:12px">${envListHtml(globalPreset)}</div>
-    </div>
+    <div class="main-content">
+        <div class="column">
+            <div class="section">
+                <div class="section-title">全局模型 <span class="badge">所有项目默认</span></div>
+                <div class="presets">${globalHtml}</div>
+                <div class="env-section">
+                    <div class="env-title">环境变量</div>
+                    <div class="env-list">${envListHtml(globalPreset)}</div>
+                </div>
+            </div>
+        </div>
 
-    <div class="section">
-        <div class="section-title">📂 项目模型 ${wsRoot ? `<span class="badge">${path.basename(wsRoot)}</span>` : ''}</div>
-        ${wsRoot ? `<div class="presets">${projectHtml}</div>`
-            : '<div style="color:var(--vscode-descriptionForeground);padding:12px;">请先打开一个项目文件夹</div>'}
+        <div class="column">
+            <div class="section">
+                <div class="section-title">项目模型 ${wsRoot ? `<span class="badge">${path.basename(wsRoot)}</span>` : ''}</div>
+                <div class="presets">${projectHtml}</div>
+            </div>
+        </div>
     </div>
 
     <div class="btn-row">
         <button class="btn btn-secondary" onclick="editSettings()">编辑全局 settings.json</button>
-        <button class="btn btn-outline" onclick="editEnvs()">编辑预设 (envs.json)</button>
-        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目 settings.local.json</button>' : ''}
+        <button class="btn btn-outline" onclick="editEnvs()">编辑预设</button>
+        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目配置</button>' : ''}
     </div>
 </div>
 <script>
@@ -591,7 +609,7 @@ function activate(context) {
     initGlobalEnvs();
 
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = 'ccSwitch.showQuickActions';
+    statusBarItem.command = 'ccSwitch.showConfig';
     updateStatusBar();
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);

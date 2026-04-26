@@ -2,7 +2,7 @@
 	"name": "claude-code-model-switch",
 	"displayName": "Claude Code Model Switch",
 	"description": "为 Claude Code 提供全局和项目级模型一键切换。支持 Anthropic 官方 API、智谱 GLM、Kimi、MiniMax、DeepSeek 等任意兼容 Anthropic 协议的 API 提供商。可按项目独立配置模型和环境变量，互不干扰。",
-	"version": "2.1.4",
+	"version": "2.1.5",
 	"publisher": "overcast404",
 	"icon": "logo.png",
 	"license": "MIT",
