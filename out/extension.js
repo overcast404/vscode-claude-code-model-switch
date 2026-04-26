@@ -119,6 +119,10 @@ function matchPreset(presetId) {
     return presets.find(p => p.id === presetId) || null;
 }
 
+function savePresets(presets) {
+    writeJSON(GLOBAL_ENVS_PATH, { presets });
+}
+
 // ==================== 配置读取 ====================
 function getGlobalPreset() {
     const settings = readJSON(GLOBAL_SETTINGS_PATH);
@@ -391,16 +395,16 @@ function showConfigPanel() {
         if (message.command === 'switchGlobal') {
             const preset = presets.find(p => p.id === message.presetId);
             if (preset) { await switchGlobalPreset(preset); updateStatusBar(); }
-            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+            refreshPanelView(panel, wsRoot);
         }
         if (message.command === 'switchProject') {
             const preset = presets.find(p => p.id === message.presetId);
             if (preset && wsRoot) { await switchProjectPreset(wsRoot, preset); updateStatusBar(); }
-            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+            refreshPanelView(panel, wsRoot);
         }
         if (message.command === 'followGlobal') {
             if (wsRoot) { await restoreFollowGlobal(wsRoot); updateStatusBar(); }
-            panel.webview.html = renderPanel({ globalPreset: getGlobalPreset(), projectPreset: getProjectPreset(wsRoot), activePreset: getActiveModel(wsRoot).preset, source: getActiveModel(wsRoot).source, presets, wsRoot });
+            refreshPanelView(panel, wsRoot);
         }
         if (message.command === 'editSettings') {
             vscode.commands.executeCommand('vscode.open', vscode.Uri.file(GLOBAL_SETTINGS_PATH));
@@ -414,6 +418,49 @@ function showConfigPanel() {
                 vscode.commands.executeCommand('vscode.open', vscode.Uri.file(pPath));
             }
         }
+        if (message.command === 'addPreset') {
+            const allPresets = getAllPresets();
+            if (allPresets.find(p => p.id === message.preset.id)) {
+                vscode.window.showErrorMessage(`预设 ID "${message.preset.id}" 已存在`);
+                return;
+            }
+            allPresets.push(message.preset);
+            savePresets(allPresets);
+            updateStatusBar();
+            refreshPanelView(panel, wsRoot);
+        }
+        if (message.command === 'updatePreset') {
+            const allPresets = getAllPresets();
+            const idx = allPresets.findIndex(p => p.id === message.presetId);
+            if (idx < 0) return;
+            allPresets[idx] = message.preset;
+            savePresets(allPresets);
+            updateStatusBar();
+            refreshPanelView(panel, wsRoot);
+        }
+        if (message.command === 'deletePreset') {
+            let allPresets = getAllPresets();
+            if (allPresets.length <= 1) {
+                vscode.window.showWarningMessage('至少需要保留一个预设');
+                return;
+            }
+            allPresets = allPresets.filter(p => p.id !== message.presetId);
+            savePresets(allPresets);
+            updateStatusBar();
+            refreshPanelView(panel, wsRoot);
+        }
+    });
+}
+
+function refreshPanelView(panel, wsRoot) {
+    const freshPresets = getAllPresets();
+    panel.webview.html = renderPanel({
+        globalPreset: getGlobalPreset(),
+        projectPreset: getProjectPreset(wsRoot),
+        activePreset: getActiveModel(wsRoot).preset,
+        source: getActiveModel(wsRoot).source,
+        presets: freshPresets,
+        wsRoot
     });
 }
 
@@ -424,12 +471,18 @@ function maskValue(key, value) {
     return value || '(未设置)';
 }
 
-function presetHtml(p, isActive, clickFn) {
+function presetHtml(p, isActive, clickFn, showActions, disableDelete) {
+    const actionsHtml = showActions ? `
+        <button class="pact" onclick="event.stopPropagation();openEdit('${p.id}')" title="编辑预设">&#9998;</button>
+        <button class="pact pdel" onclick="event.stopPropagation();delPreset('${p.id}')" title="删除预设"${disableDelete ? ' disabled' : ''}>&#10005;</button>` : '';
     return `
     <div class="preset ${isActive ? 'active' : ''}" onclick="${clickFn}('${p.id}')">
         <div class="preset-header">
             <div class="preset-name">${p.label}</div>
-            ${isActive ? '<div class="badge-active">当前</div>' : ''}
+            <div style="display:flex;align-items:center;gap:4px;">
+                ${isActive ? '<div class="badge-active">当前</div>' : ''}
+                ${actionsHtml}
+            </div>
         </div>
         <div class="preset-desc">${p.description}</div>
     </div>`;
@@ -446,7 +499,7 @@ function envListHtml(preset) {
 
 function renderPanel(data) {
     const { globalPreset, projectPreset, activePreset, source, presets, wsRoot } = data;
-    const globalHtml = presets.map(p => presetHtml(p, globalPreset?.id === p.id, 'switchGlobal')).join('');
+    const globalHtml = presets.map(p => presetHtml(p, globalPreset?.id === p.id, 'switchGlobal', true, presets.length <= 1)).join('');
 
     // 判断是否真正跟随全局
     const isFollowGlobal = source === 'followGlobal';
@@ -552,6 +605,38 @@ function renderPanel(data) {
     .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
     .btn-outline { background: transparent; border: 1px solid var(--vscode-panel-border); color: var(--vscode-foreground); }
     .btn-outline:hover { background: var(--vscode-editor-inactiveSelectionBackground); }
+    .btn-primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
+    .btn-add { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+               font-size: 11px; padding: 3px 8px; margin-left: auto; }
+    .btn-add:hover { background: var(--vscode-button-hoverBackground); }
+    .pact { background: none; border: none; cursor: pointer; font-size: 13px; padding: 1px 3px;
+            color: var(--vscode-descriptionForeground); border-radius: 3px; line-height: 1; }
+    .pact:hover { background: var(--vscode-editor-inactiveSelectionBackground); color: var(--vscode-foreground); }
+    .pdel:hover { color: var(--vscode-inputValidation-errorForeground); }
+    .pdel:disabled { opacity: 0.3; cursor: not-allowed; }
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5);
+                     display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+             border-radius: 8px; width: 520px; max-height: 90vh; display: flex; flex-direction: column;
+             box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .modal-title { font-size: 15px; font-weight: 600; padding: 16px 20px 12px;
+                   border-bottom: 1px solid var(--vscode-panel-border); }
+    .modal-body { padding: 12px 20px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--vscode-panel-border);
+                    display: flex; gap: 8px; justify-content: flex-end; }
+    .form-group { margin-bottom: 10px; }
+    .form-label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 3px; }
+    .form-input, .form-select { width: 100%; padding: 6px 8px; font-size: 12px;
+        font-family: var(--vscode-editor-font-family); background: var(--vscode-input-background);
+        color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border);
+        border-radius: 3px; outline: none; }
+    .form-input:focus, .form-select:focus { border-color: var(--vscode-focusBorder); }
+    .form-hint { font-weight: 400; color: var(--vscode-descriptionForeground); }
+    .form-divider { border-top: 1px solid var(--vscode-panel-border); margin: 10px 0; }
+    .field-synced { border-color: var(--vscode-textLink-foreground); }
+    .field-unsynced { border-color: var(--vscode-inputValidation-warningBorder); }
+    .preset { position: relative; }
 </style>
 </head>
 <body>
@@ -567,7 +652,7 @@ function renderPanel(data) {
     <div class="main-content">
         <div class="column">
             <div class="section">
-                <div class="section-title">全局模型 <span class="badge">所有项目默认</span></div>
+                <div class="section-title">全局模型 <span class="badge">所有项目默认</span> <button class="btn btn-add" onclick="openAdd()">+ 添加预设</button></div>
                 <div class="presets">${globalHtml}</div>
                 <div class="env-section">
                     <div class="env-title">环境变量</div>
@@ -590,14 +675,254 @@ function renderPanel(data) {
         ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目配置</button>' : ''}
     </div>
 </div>
+
+<div class="modal-overlay" id="modalOverlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">添加预设</div>
+    <div class="modal-body">
+      <div class="form-group" id="fgTemplate">
+        <label class="form-label">基于预设</label>
+        <select class="form-select" id="templatePreset" onchange="onTemplateChange()">
+          <option value="">从零开始</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ID</label>
+        <input class="form-input" id="presetId" oninput="this._manual=true" placeholder="自动从名称生成" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">名称 <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+        <input class="form-input" id="presetLabel" oninput="onLabelChange()" placeholder="例如: cc:MyModel" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">描述</label>
+        <input class="form-input" id="presetDesc" placeholder="例如: DashScope MyModel" />
+      </div>
+      <div class="form-divider"></div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_MODEL <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+        <input class="form-input" id="anthropicModel" oninput="onModelChange()" placeholder="例如: qwen3.6-plus" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_DEFAULT_SONNET_MODEL <span class="form-hint" id="hintSonnet">与 ANTHROPIC_MODEL 同步</span></label>
+        <input class="form-input field-synced" id="sonnetModel" oninput="onSubModelChange('sonnet')" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_DEFAULT_OPUS_MODEL <span class="form-hint" id="hintOpus">与 ANTHROPIC_MODEL 同步</span></label>
+        <input class="form-input field-synced" id="opusModel" oninput="onSubModelChange('opus')" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_DEFAULT_HAIKU_MODEL <span class="form-hint" id="hintHaiku">与 ANTHROPIC_MODEL 同步</span></label>
+        <input class="form-input field-synced" id="haikuModel" oninput="onSubModelChange('haiku')" />
+      </div>
+      <div class="form-divider"></div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_AUTH_TOKEN</label>
+        <input class="form-input" type="password" id="authToken" placeholder="输入 API Token" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">ANTHROPIC_BASE_URL</label>
+        <input class="form-input" id="baseUrl" placeholder="https://..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">API_TIMEOUT_MS</label>
+        <input class="form-input" id="apiTimeout" placeholder="300000" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC</label>
+        <input class="form-input" id="disableTraffic" placeholder="1" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="savePreset()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script id="presets-data" type="application/json">${JSON.stringify(presets)}</script>
 <script>
+(function(){
 const vscode = acquireVsCodeApi();
-function switchGlobal(id) { vscode.postMessage({command:'switchGlobal',presetId:id}); }
-function switchProject(id) { vscode.postMessage({command:'switchProject',presetId:id}); }
-function followGlobal() { vscode.postMessage({command:'followGlobal'}); }
-function editSettings() { vscode.postMessage({command:'editSettings'}); }
-function editEnvs() { vscode.postMessage({command:'editEnvs'}); }
-function editProjectSettings() { vscode.postMessage({command:'editProjectSettings'}); }
+const allPresets = JSON.parse(document.getElementById('presets-data').textContent);
+
+let editingId = null;
+let dirty = { sonnet: false, opus: false, haiku: false };
+
+window.switchGlobal = function(id) { vscode.postMessage({command:'switchGlobal',presetId:id}); };
+window.switchProject = function(id) { vscode.postMessage({command:'switchProject',presetId:id}); };
+window.followGlobal = function() { vscode.postMessage({command:'followGlobal'}); };
+window.editSettings = function() { vscode.postMessage({command:'editSettings'}); };
+window.editEnvs = function() { vscode.postMessage({command:'editEnvs'}); };
+window.editProjectSettings = function() { vscode.postMessage({command:'editProjectSettings'}); };
+
+function byId(id) { return document.getElementById(id); }
+
+function populateTemplateDropdown() {
+  var sel = byId('templatePreset');
+  sel.innerHTML = '<option value="">从零开始</option>';
+  allPresets.forEach(function(p) {
+    sel.innerHTML += '<option value="' + p.id + '">' + p.label + '</option>';
+  });
+}
+
+window.openAdd = function() {
+  editingId = null;
+  byId('modalTitle').textContent = '添加预设';
+  byId('fgTemplate').style.display = '';
+  byId('presetId').readOnly = false;
+  byId('presetId')._manual = false;
+  populateTemplateDropdown();
+  byId('templatePreset').value = '';
+  clearForm();
+  byId('modalOverlay').style.display = 'flex';
+};
+
+window.openEdit = function(id) {
+  editingId = id;
+  var p = allPresets.find(function(x) { return x.id === id; });
+  if (!p) return;
+  byId('modalTitle').textContent = '编辑预设';
+  byId('fgTemplate').style.display = 'none';
+  byId('presetId').readOnly = true;
+  byId('presetId')._manual = true;
+  byId('modalOverlay').style.display = 'flex';
+  fillForm(p);
+};
+
+window.delPreset = function(id) {
+  if (!confirm('确定删除预设 "' + id + '" 吗？此操作不可撤销。')) return;
+  vscode.postMessage({command:'deletePreset',presetId:id});
+};
+
+window.closeModal = function() {
+  byId('modalOverlay').style.display = 'none';
+};
+
+window.onTemplateChange = function() {
+  var val = byId('templatePreset').value;
+  if (!val) { clearForm(); return; }
+  var p = allPresets.find(function(x) { return x.id === val; });
+  if (p) fillForm(p);
+};
+
+window.onLabelChange = function() {
+  var idInput = byId('presetId');
+  if (!idInput._manual) {
+    idInput.value = byId('presetLabel').value.toLowerCase().replace(/[^a-z0-9\\-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  }
+};
+
+window.onModelChange = function() {
+  var v = byId('anthropicModel').value;
+  if (!dirty.sonnet) byId('sonnetModel').value = v;
+  if (!dirty.opus) byId('opusModel').value = v;
+  if (!dirty.haiku) byId('haikuModel').value = v;
+};
+
+window.onSubModelChange = function(field) {
+  dirty[field] = true;
+  updateFieldUI(field, true);
+};
+
+window.savePreset = function() {
+  var label = byId('presetLabel').value.trim();
+  var model = byId('anthropicModel').value.trim();
+  if (!label) { alert('请输入名称'); return; }
+  if (!model) { alert('请输入 ANTHROPIC_MODEL'); return; }
+
+  var id = byId('presetId').value.trim() || label.toLowerCase().replace(/[^a-z0-9\\-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+
+  var preset = {
+    id: id,
+    label: label,
+    description: byId('presetDesc').value.trim(),
+    env: {
+      ANTHROPIC_MODEL: model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: byId('sonnetModel').value.trim(),
+      ANTHROPIC_DEFAULT_OPUS_MODEL: byId('opusModel').value.trim(),
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: byId('haikuModel').value.trim(),
+      ANTHROPIC_AUTH_TOKEN: byId('authToken').value.trim(),
+      ANTHROPIC_BASE_URL: byId('baseUrl').value.trim(),
+      API_TIMEOUT_MS: byId('apiTimeout').value.trim(),
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: byId('disableTraffic').value.trim()
+    }
+  };
+
+  if (editingId) {
+    vscode.postMessage({command:'updatePreset',presetId:editingId,preset:preset});
+  } else {
+    var exists = allPresets.find(function(p) { return p.id === id; });
+    if (exists && !editingId) { alert('ID "' + id + '" 已存在，请修改名称或手动设置 ID'); return; }
+    vscode.postMessage({command:'addPreset',preset:preset});
+  }
+};
+
+function fillForm(p) {
+  byId('presetId').value = p.id;
+  byId('presetLabel').value = p.label;
+  byId('presetDesc').value = p.description || '';
+  var e = p.env || {};
+  byId('anthropicModel').value = e.ANTHROPIC_MODEL || '';
+  var modelVal = e.ANTHROPIC_MODEL || '';
+  byId('sonnetModel').value = e.ANTHROPIC_DEFAULT_SONNET_MODEL || '';
+  byId('opusModel').value = e.ANTHROPIC_DEFAULT_OPUS_MODEL || '';
+  byId('haikuModel').value = e.ANTHROPIC_DEFAULT_HAIKU_MODEL || '';
+  byId('authToken').value = e.ANTHROPIC_AUTH_TOKEN || '';
+  byId('baseUrl').value = e.ANTHROPIC_BASE_URL || '';
+  byId('apiTimeout').value = e.API_TIMEOUT_MS || '';
+  byId('disableTraffic').value = e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || '';
+
+  dirty.sonnet = !!e.ANTHROPIC_DEFAULT_SONNET_MODEL && e.ANTHROPIC_DEFAULT_SONNET_MODEL !== modelVal;
+  dirty.opus = !!e.ANTHROPIC_DEFAULT_OPUS_MODEL && e.ANTHROPIC_DEFAULT_OPUS_MODEL !== modelVal;
+  dirty.haiku = !!e.ANTHROPIC_DEFAULT_HAIKU_MODEL && e.ANTHROPIC_DEFAULT_HAIKU_MODEL !== modelVal;
+
+  updateFieldUI('sonnet', dirty.sonnet);
+  updateFieldUI('opus', dirty.opus);
+  updateFieldUI('haiku', dirty.haiku);
+}
+
+function clearForm() {
+  byId('presetId').value = '';
+  byId('presetId')._manual = false;
+  byId('presetLabel').value = '';
+  byId('presetDesc').value = '';
+  byId('anthropicModel').value = '';
+  byId('sonnetModel').value = '';
+  byId('opusModel').value = '';
+  byId('haikuModel').value = '';
+  byId('authToken').value = '';
+  byId('baseUrl').value = '';
+  byId('apiTimeout').value = '';
+  byId('disableTraffic').value = '';
+  dirty.sonnet = false;
+  dirty.opus = false;
+  dirty.haiku = false;
+  updateFieldUI('sonnet', false);
+  updateFieldUI('opus', false);
+  updateFieldUI('haiku', false);
+}
+
+function updateFieldUI(field, isDirty) {
+  var el = byId(field + 'Model');
+  var hint = byId('hint' + field.charAt(0).toUpperCase() + field.slice(1));
+  if (isDirty) {
+    el.classList.remove('field-synced');
+    el.classList.add('field-unsynced');
+    hint.textContent = '已手动修改';
+    hint.style.color = 'var(--vscode-inputValidation-warningForeground)';
+  } else {
+    el.classList.remove('field-unsynced');
+    el.classList.add('field-synced');
+    hint.textContent = '与 ANTHROPIC_MODEL 同步';
+    hint.style.color = '';
+  }
+}
+
+byId('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === byId('modalOverlay')) closeModal();
+});
+})();
 </script>
 </body>
 </html>`;
