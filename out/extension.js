@@ -40,28 +40,26 @@ const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const fs = __importStar(require("fs"));
 
-// ==================== 默认预设（兜底） ====================
-const DEFAULT_PRESETS = [
-    { id: 'cc:qwen3.6-plus', description: 'DashScope qwen3.6-plus',
+// ==================== 默认供应商（兜底） ====================
+const ENVS_VERSION = 2;
+const DEFAULT_PROVIDERS = [
+    { id: 'dashscope', label: 'DashScope', description: '阿里云百炼 DashScope API',
       env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        ANTHROPIC_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus' } },
-    { id: 'cc:GLM-5', description: 'DashScope GLM-5',
-      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        ANTHROPIC_MODEL: 'glm-5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5' } },
-    { id: 'cc:kimi-k2.5', description: 'DashScope kimi-k2.5',
-      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        ANTHROPIC_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5' } },
-    { id: 'cc:MiniMax-M2.5', description: 'DashScope MiniMax-M2.5',
-      env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
-        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        ANTHROPIC_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5' } }
+        API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+      models: [
+        { id: 'cc:qwen3.6-plus', label: 'cc:qwen3.6-plus', description: 'DashScope qwen3.6-plus',
+          env: { ANTHROPIC_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus' } },
+        { id: 'cc:GLM-5', label: 'cc:GLM-5', description: 'DashScope GLM-5',
+          env: { ANTHROPIC_MODEL: 'glm-5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5' } },
+        { id: 'cc:kimi-k2.5', label: 'cc:kimi-k2.5', description: 'DashScope kimi-k2.5',
+          env: { ANTHROPIC_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5' } },
+        { id: 'cc:MiniMax-M2.5', label: 'cc:MiniMax-M2.5', description: 'DashScope MiniMax-M2.5',
+          env: { ANTHROPIC_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5' } }
+      ] }
 ];
 
 // ==================== 常量 ====================
@@ -98,20 +96,131 @@ function deleteFile(filePath) {
     try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { }
 }
 
-// ==================== 预设（仅全局） ====================
-function initGlobalEnvs() {
-    if (!fs.existsSync(GLOBAL_ENVS_PATH)) {
-        try {
-            const dir = path.dirname(GLOBAL_ENVS_PATH);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            writeJSON(GLOBAL_ENVS_PATH, { presets: DEFAULT_PRESETS });
-        } catch (e) { console.error('初始化 envs.json 失败:', e); }
+// ==================== 供应商 & 预设（仅全局） ====================
+function flattenProviders(providers) {
+    const result = [];
+    for (const p of providers) {
+        for (const m of (p.models || [])) {
+            result.push({
+                id: m.id,
+                label: m.label || m.id,
+                description: m.description || p.description || '',
+                env: { ...(p.env || {}), ...(m.env || {}) },
+                _providerId: p.id,
+                _providerLabel: p.label || p.id
+            });
+        }
     }
+    return result;
+}
+
+function migratePresetsToProviders(presets) {
+    const groups = new Map();
+    for (const preset of presets) {
+        const key = `${preset.env.ANTHROPIC_BASE_URL || ''}::${preset.env.ANTHROPIC_AUTH_TOKEN || ''}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(preset);
+    }
+    return Array.from(groups.entries()).map(([, group]) => {
+        const sharedKeys = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
+        const sharedEnv = {};
+        for (const k of sharedKeys) {
+            const val = group[0].env[k];
+            if (val !== undefined && group.every(p => p.env[k] === val)) sharedEnv[k] = val;
+        }
+        const url = group[0].env.ANTHROPIC_BASE_URL || '';
+        const hostname = url.replace('https://', '').split('/')[0] || 'provider';
+        const pDesc = group[0].description || hostname;
+        return {
+            id: hostname.replace(/[^a-zA-Z0-9_-]/g, '_'),
+            label: hostname,
+            description: pDesc,
+            env: sharedEnv,
+            models: group.map(p => {
+                const mEnv = { ...p.env };
+                for (const k of Object.keys(sharedEnv)) delete mEnv[k];
+                return { id: p.id, label: p.label || p.id, description: p.description || '', env: mEnv };
+            })
+        };
+    });
+}
+
+function getAllProviders() {
+    const data = readJSON(GLOBAL_ENVS_PATH);
+    if (!data) return JSON.parse(JSON.stringify(DEFAULT_PROVIDERS));
+    if (data.version === 2 && Array.isArray(data.providers)) return data.providers;
+    if (Array.isArray(data.presets)) {
+        const providers = migratePresetsToProviders(data.presets);
+        try { writeJSON(GLOBAL_ENVS_PATH, { version: ENVS_VERSION, providers }); } catch (e) { console.error('迁移 envs.json 失败:', e); }
+        return providers;
+    }
+    return JSON.parse(JSON.stringify(DEFAULT_PROVIDERS));
+}
+
+function saveAllProviders(providers) {
+    writeJSON(GLOBAL_ENVS_PATH, { version: ENVS_VERSION, providers });
+}
+
+// ==================== 供应商 CRUD ====================
+function findModel(modelId) {
+    const providers = getAllProviders();
+    for (const p of providers) {
+        const m = p.models.find(x => x.id === modelId);
+        if (m) return { provider: p, model: m };
+    }
+    return null;
+}
+
+function addModelToProvider(providerId, model) {
+    const providers = getAllProviders();
+    const p = providers.find(x => x.id === providerId);
+    if (!p || p.models.find(x => x.id === model.id)) return false;
+    p.models.push(model);
+    saveAllProviders(providers);
+    return true;
+}
+
+function addProviderWithModel(providerData, model) {
+    const providers = getAllProviders();
+    if (providers.find(x => x.id === providerData.id)) return false;
+    providerData.models = [model];
+    providers.push(providerData);
+    saveAllProviders(providers);
+    return true;
+}
+
+function updateModel(modelId, updated) {
+    const providers = getAllProviders();
+    for (const p of providers) {
+        const idx = p.models.findIndex(x => x.id === modelId);
+        if (idx >= 0) { p.models[idx] = updated; saveAllProviders(providers); return true; }
+    }
+    return false;
+}
+
+function deleteModel(modelId) {
+    const providers = getAllProviders();
+    for (const p of providers) {
+        const idx = (p.models || []).findIndex(x => x.id === modelId);
+        if (idx >= 0) {
+            p.models.splice(idx, 1);
+            if (p.models.length === 0) {
+                const pIdx = providers.indexOf(p);
+                if (pIdx >= 0) providers.splice(pIdx, 1);
+            }
+            saveAllProviders(providers);
+            return true;
+        }
+    }
+    return false;
+}
+
+function getModelCount() {
+    return getAllProviders().reduce((sum, p) => sum + (p.models?.length || 0), 0);
 }
 
 function getAllPresets() {
-    const config = readJSON(GLOBAL_ENVS_PATH);
-    return (config && config.presets) || DEFAULT_PRESETS;
+    return flattenProviders(getAllProviders());
 }
 
 function matchPreset(presetId) {
@@ -119,8 +228,14 @@ function matchPreset(presetId) {
     return presets.find(p => p.id === presetId) || null;
 }
 
-function savePresets(presets) {
-    writeJSON(GLOBAL_ENVS_PATH, { presets });
+function initGlobalEnvs() {
+    if (!fs.existsSync(GLOBAL_ENVS_PATH)) {
+        try {
+            const dir = path.dirname(GLOBAL_ENVS_PATH);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            writeJSON(GLOBAL_ENVS_PATH, { version: ENVS_VERSION, providers: DEFAULT_PROVIDERS });
+        } catch (e) { console.error('初始化 envs.json 失败:', e); }
+    }
 }
 
 // ==================== 配置读取 ====================
@@ -381,13 +496,14 @@ function showConfigPanel() {
     const globalPreset = getGlobalPreset();
     const projectPreset = getProjectPreset(wsRoot);
     const presets = getAllPresets();
+    const providers = getAllProviders();
 
     const panel = vscode.window.createWebviewPanel(
         'ccSwitchConfig', 'Claude Code 模型配置', vscode.ViewColumn.One,
         { enableScripts: true, retainContextWhenHidden: true }
     );
 
-    panel.webview.html = renderPanel({ globalPreset, projectPreset, activePreset, source, presets, wsRoot });
+    panel.webview.html = renderPanel({ globalPreset, projectPreset, activePreset, source, presets, providers, wsRoot });
 
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'switchGlobal') {
@@ -416,41 +532,69 @@ function showConfigPanel() {
                 vscode.commands.executeCommand('vscode.open', vscode.Uri.file(pPath));
             }
         }
-        if (message.command === 'addPreset') {
-            const allPresets = getAllPresets();
-            if (allPresets.find(p => p.id === message.preset.id)) {
-                vscode.window.showErrorMessage(`预设 "${message.preset.id}" 已存在`);
+        if (message.command === 'addProvider') {
+            if (addProviderWithModel(message.provider, message.model)) {
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            } else {
+                vscode.window.showErrorMessage(`供应商 "${message.provider.id}" 已存在`);
+            }
+        }
+        if (message.command === 'addModel') {
+            if (addModelToProvider(message.providerId, message.model)) {
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            } else {
+                vscode.window.showErrorMessage('添加模型失败：供应商不存在或模型 ID 重复');
+            }
+        }
+        if (message.command === 'updateProvider') {
+            const providers = getAllProviders();
+            const idx = providers.findIndex(p => p.id === message.providerId);
+            if (idx >= 0) {
+                const models = providers[idx].models;
+                providers[idx] = message.provider;
+                providers[idx].models = models;
+                saveAllProviders(providers);
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            }
+        }
+        if (message.command === 'updateModel') {
+            if (updateModel(message.modelId, message.model)) {
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            }
+        }
+        if (message.command === 'deleteProvider') {
+            const allProviders = getAllProviders();
+            if (allProviders.length <= 1) {
+                vscode.window.showWarningMessage('至少需要保留一个供应商');
                 return;
             }
-            allPresets.push(message.preset);
-            savePresets(allPresets);
-            updateStatusBar();
-            refreshPanelView(panel, wsRoot);
+            const idx = allProviders.findIndex(p => p.id === message.providerId);
+            if (idx >= 0) {
+                allProviders.splice(idx, 1);
+                saveAllProviders(allProviders);
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            }
         }
-        if (message.command === 'updatePreset') {
-            const allPresets = getAllPresets();
-            const idx = allPresets.findIndex(p => p.id === message.presetId);
-            if (idx < 0) return;
-            allPresets[idx] = message.preset;
-            savePresets(allPresets);
-            updateStatusBar();
-            refreshPanelView(panel, wsRoot);
-        }
-        if (message.command === 'deletePreset') {
-            let allPresets = getAllPresets();
-            if (allPresets.length <= 1) {
-                vscode.window.showWarningMessage('至少需要保留一个预设');
+        if (message.command === 'deleteModel') {
+            if (getModelCount() <= 1) {
+                vscode.window.showWarningMessage('至少需要保留一个模型');
                 return;
             }
-            allPresets = allPresets.filter(p => p.id !== message.presetId);
-            savePresets(allPresets);
-            updateStatusBar();
-            refreshPanelView(panel, wsRoot);
+            if (deleteModel(message.modelId)) {
+                updateStatusBar();
+                refreshPanelView(panel, wsRoot);
+            }
         }
     });
 }
 
 function refreshPanelView(panel, wsRoot) {
+    const freshProviders = getAllProviders();
     const freshPresets = getAllPresets();
     panel.webview.html = renderPanel({
         globalPreset: getGlobalPreset(),
@@ -458,6 +602,7 @@ function refreshPanelView(panel, wsRoot) {
         activePreset: getActiveModel(wsRoot).preset,
         source: getActiveModel(wsRoot).source,
         presets: freshPresets,
+        providers: freshProviders,
         wsRoot
     });
 }
@@ -467,23 +612,6 @@ function maskValue(key, value) {
         return value ? '******' : '(未设置)';
     }
     return value || '(未设置)';
-}
-
-function presetHtml(p, isActive, clickFn, showActions, disableDelete) {
-    const actionsHtml = showActions ? `
-        <button class="pact" onclick="event.stopPropagation();openEdit('${p.id}')" title="编辑预设">&#9998;</button>
-        <button class="pact pdel" onclick="event.stopPropagation();delPreset('${p.id}')" title="删除预设"${disableDelete ? ' disabled' : ''}>&#10005;</button>` : '';
-    return `
-    <div class="preset ${isActive ? 'active' : ''}" onclick="${clickFn}('${p.id}')">
-        <div class="preset-header">
-            <div class="preset-name">${p.id}</div>
-            <div style="display:flex;align-items:center;gap:4px;">
-                ${isActive ? '<div class="badge-active">当前</div>' : ''}
-                ${actionsHtml}
-            </div>
-        </div>
-        <div class="preset-desc">${p.description}</div>
-    </div>`;
 }
 
 function envListHtml(preset) {
@@ -496,79 +624,132 @@ function envListHtml(preset) {
 }
 
 function renderPanel(data) {
-    const { globalPreset, projectPreset, activePreset, source, presets, wsRoot } = data;
-    const globalHtml = presets.map(p => presetHtml(p, globalPreset?.id === p.id, 'switchGlobal', true, presets.length <= 1)).join('');
+    const { globalPreset, projectPreset, activePreset, source, presets, providers, wsRoot } = data;
 
-    // 判断是否真正跟随全局
     const isFollowGlobal = source === 'followGlobal';
-    // 判断是否有孤立配置（presetId 找不到）
     const isOrphaned = source === 'project_orphaned';
-    // 判断是否有自定义配置
     const isCustom = source === 'project_custom';
 
-    // 项目配置区域
+    // ==================== 供应商分组渲染函数（通用，用于项目列） ====================
+    function providerGroupHtml(providers, activeId, clickFn) {
+        return providers.map(p => {
+            const items = p.models.map(m => {
+                const isActive = activeId === m.id;
+                return `
+                <div class="preset ${isActive ? 'active' : ''}" data-cmd="${clickFn}" data-id="${m.id}">
+                    <div class="preset-header">
+                        <div class="preset-name">${m.id}</div>
+                        <div style="display:flex;align-items:center;gap:4px;">
+                            ${isActive ? '<div class="badge-active">当前</div>' : ''}
+                        </div>
+                    </div>
+                    <div class="preset-desc">${m.description || ''}</div>
+                </div>`;
+            }).join('');
+            return `
+            <div class="provider-group">
+                <div class="provider-header" data-cmd="toggle">
+                    <span class="provider-toggle">&#9660;</span>
+                    <span class="provider-name">${p.label || p.id}</span>
+                    <span class="provider-badge">${p.models.length}</span>
+                </div>
+                <div class="provider-models">
+                    ${items}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ==================== 全局列（带添加供应商和模型操作） ====================
+    const globalHtml = providers.map(p => {
+        const items = p.models.map(m => {
+            const isActive = globalPreset?.id === m.id;
+            const disableDel = getModelCount() <= 1;
+            return `
+            <div class="preset ${isActive ? 'active' : ''}" data-cmd="switchGlobal" data-id="${m.id}">
+                <div class="preset-header">
+                    <div class="preset-name">${m.id}</div>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        ${isActive ? '<div class="badge-active">当前</div>' : ''}
+                        <button class="pact" data-cmd="editModel" data-id="${m.id}" title="编辑模型">&#9998;</button>
+                        <button class="pact pdel" data-cmd="delModel" data-id="${m.id}" title="删除模型"${disableDel ? ' disabled' : ''}>&#10005;</button>
+                    </div>
+                </div>
+                <div class="preset-desc">${m.description || ''}</div>
+            </div>`;
+        }).join('');
+        const disableProviderDel = providers.length <= 1;
+        return `
+        <div class="provider-group">
+            <div class="provider-header" data-cmd="toggle">
+                <span class="provider-toggle">&#9660;</span>
+                <span class="provider-name">${p.label || p.id}</span>
+                <span class="provider-badge">${p.models.length}</span>
+                <button class="pact" data-cmd="editProvider" data-id="${p.id}" title="编辑供应商">&#9998;</button>
+                <button class="pact pdel" data-cmd="delProvider" data-id="${p.id}" title="删除供应商"${disableProviderDel ? ' disabled' : ''}>&#10005;</button>
+                <button class="btn btn-add-provider" data-cmd="addModel" data-id="${p.id}">+ 模型</button>
+            </div>
+            <div class="provider-models">
+                ${items}
+            </div>
+        </div>`;
+    }).join('');
+
+    // ==================== 项目列 ====================
     let projectHtml = '';
     if (wsRoot) {
-        // 孤立配置警告（如果有）
         if (isOrphaned) {
             projectHtml = `<div class="warning-box">
                 <div class="warning-title">⚠️ 预设配置丢失</div>
                 <div class="warning-desc">项目引用的预设 "${projectPreset.id}" 已不存在</div>
             </div>`;
         }
-        // 自定义配置提示（如果有）
         if (isCustom) {
             projectHtml = `<div class="info-box">
                 <div class="info-title">📝 自定义配置</div>
                 <div class="info-desc">项目使用手动配置的环境变量</div>
             </div>`;
         }
-        // 跟随全局选项
-        projectHtml += `<div class="follow-item ${isFollowGlobal ? 'active' : ''}" onclick="followGlobal()">
+        projectHtml += `<div class="follow-item ${isFollowGlobal ? 'active' : ''}" data-cmd="followGlobal">
                 <div class="follow-name">🔄 跟随全局</div>
                 ${isFollowGlobal ? '<div class="badge-active">当前</div>' : ''}
                 <div class="follow-desc">${globalPreset?.id || '未设置'}</div>
            </div>` +
-          presets.map(p => presetHtml(p, projectPreset?.id === p.id && !isOrphaned && !isCustom, 'switchProject')).join('');
+           providerGroupHtml(providers, projectPreset?.id && !isOrphaned && !isCustom ? projectPreset.id : null, 'switchProject');
     } else {
         projectHtml = '<div class="no-workspace">请先打开一个项目文件夹</div>';
     }
 
-    // sourceText 根据不同状态显示不同文本
     let sourceText = '';
-    if (source === 'project') {
-        sourceText = `📂 项目独立 (${path.basename(wsRoot || '')})`;
-    } else if (source === 'project_orphaned') {
-        sourceText = `⚠️ 预设丢失 (${path.basename(wsRoot || '')})`;
-    } else if (source === 'project_custom') {
-        sourceText = `📝 自定义配置 (${path.basename(wsRoot || '')})`;
-    } else {
-        sourceText = `🔄 跟随全局 (${globalPreset?.id || '未设置'})`;
-    }
+    if (source === 'project') sourceText = `📂 项目独立 (${path.basename(wsRoot || '')})`;
+    else if (source === 'project_orphaned') sourceText = `⚠️ 预设丢失 (${path.basename(wsRoot || '')})`;
+    else if (source === 'project_custom') sourceText = `📝 自定义配置 (${path.basename(wsRoot || '')})`;
+    else sourceText = `🔄 跟随全局 (${globalPreset?.id || '未设置'})`;
 
     return `<!DOCTYPE html>
 <html>
 <head>
 <style>
     * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
     body { font-family: var(--vscode-font-family); padding: 16px; color: var(--vscode-foreground);
-           background: var(--vscode-editor-background); margin: 0; }
-    .container { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 32px); }
-    .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
+           background: var(--vscode-editor-background); }
+    .container { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+    .header { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
     .header-title { font-size: 16px; font-weight: 600; }
     .header-current { font-size: 12px; color: var(--vscode-descriptionForeground); }
     .header-current-active { color: var(--vscode-textLink-foreground); font-weight: 500; }
-    .main-content { display: flex; gap: 16px; min-height: 0; align-items: flex-start; }
-    .column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .section { min-height: 0; display: flex; flex-direction: column; }
-    .section-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .main-content { display: flex; gap: 16px; flex: 1; min-height: 0; overflow: hidden; }
+    .column { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
+    .section { display: flex; flex-direction: column; }
+    .section-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
              font-size: 10px; padding: 2px 6px; border-radius: 8px; }
     .badge-active { background: var(--vscode-textLink-foreground); color: var(--vscode-editor-background);
                     font-size: 10px; padding: 2px 6px; border-radius: 3px; }
-    .presets { display: grid; gap: 4px; max-height: 400px; overflow-y: auto; }
+    .presets { display: flex; flex-direction: column; gap: 4px; }
     .preset { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
-              border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: all 0.15s; }
+              border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: all 0.15s; margin-left: 12px; }
     .preset:hover { background: var(--vscode-editor-inactiveSelectionBackground); border-color: var(--vscode-focusBorder); }
     .preset.active { background: var(--vscode-editor-selectionBackground); border-color: var(--vscode-focusBorder); }
     .preset-header { display: flex; justify-content: space-between; align-items: center; }
@@ -583,8 +764,8 @@ function renderPanel(data) {
     .follow-desc { font-size: 11px; color: var(--vscode-descriptionForeground); }
     .env-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--vscode-panel-border); }
     .env-title { font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
-    .env-list { max-height: 100px; overflow-y: auto; }
-    .env-item { display: flex; gap: 8px; font-size: 11px; margin-bottom: 2px; }
+    .env-list { display: flex; flex-direction: column; gap: 2px; }
+    .env-item { display: flex; gap: 8px; font-size: 11px; }
     .env-key { color: var(--vscode-textLink-foreground); font-family: var(--vscode-editor-font-family); min-width: 180px; }
     .env-value { font-family: var(--vscode-editor-font-family); word-break: break-all; }
     .warning-box { background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder);
@@ -596,7 +777,7 @@ function renderPanel(data) {
     .info-title { font-weight: 600; font-size: 12px; }
     .info-desc { font-size: 11px; margin-top: 2px; color: var(--vscode-descriptionForeground); }
     .no-workspace { color: var(--vscode-descriptionForeground); padding: 12px; text-align: center; }
-    .btn-row { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--vscode-panel-border); }
+    .btn-row { flex-shrink: 0; display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--vscode-panel-border); }
     .btn { padding: 8px 12px; border: none; cursor: pointer; font-size: 12px;
            border-radius: 4px; font-family: var(--vscode-font-family); }
     .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
@@ -605,9 +786,6 @@ function renderPanel(data) {
     .btn-outline:hover { background: var(--vscode-editor-inactiveSelectionBackground); }
     .btn-primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
-    .btn-add { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-               font-size: 11px; padding: 3px 8px; margin-left: auto; }
-    .btn-add:hover { background: var(--vscode-button-hoverBackground); }
     .pact { background: none; border: none; cursor: pointer; font-size: 13px; padding: 1px 3px;
             color: var(--vscode-descriptionForeground); border-radius: 3px; line-height: 1; }
     .pact:hover { background: var(--vscode-editor-inactiveSelectionBackground); color: var(--vscode-foreground); }
@@ -616,7 +794,7 @@ function renderPanel(data) {
     .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5);
                      display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
-             border-radius: 8px; width: 520px; max-height: 90vh; display: flex; flex-direction: column;
+             border-radius: 8px; width: 560px; max-height: 90vh; display: flex; flex-direction: column;
              box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
     .modal-title { font-size: 15px; font-weight: 600; padding: 16px 20px 12px;
                    border-bottom: 1px solid var(--vscode-panel-border); }
@@ -634,7 +812,34 @@ function renderPanel(data) {
     .form-divider { border-top: 1px solid var(--vscode-panel-border); margin: 10px 0; }
     .field-synced { border-color: var(--vscode-textLink-foreground); }
     .field-unsynced { border-color: var(--vscode-inputValidation-warningBorder); }
-    .preset { position: relative; }
+    .provider-group { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+                      border-radius: 6px; overflow: hidden; }
+    .provider-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+                       cursor: pointer; user-select: none; }
+    .provider-header:hover { background: var(--vscode-editor-inactiveSelectionBackground); }
+    .provider-toggle { font-size: 10px; color: var(--vscode-descriptionForeground); width: 12px; text-align: center; }
+    .provider-name { font-weight: 600; font-size: 13px; flex: 1; }
+    .provider-badge { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+                      font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+    .provider-models { display: flex; flex-direction: column; gap: 3px; padding: 0 4px 4px 4px; }
+    .provider-models.collapsed { display: none; }
+    .btn-add-provider { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+                        font-size: 10px; padding: 2px 6px; border: none; border-radius: 3px; cursor: pointer; }
+    .btn-add-provider:hover { background: var(--vscode-button-hoverBackground); }
+    .confirm-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5);
+                       display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .confirm-box { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+                   border-radius: 8px; width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .confirm-body { padding: 20px; text-align: center; }
+    .confirm-icon { font-size: 28px; margin-bottom: 8px; }
+    .confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .confirm-desc { font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .confirm-footer { padding: 12px 20px; border-top: 1px solid var(--vscode-panel-border);
+                      display: flex; gap: 8px; justify-content: center; }
+    .btn-danger { background: var(--vscode-inputValidation-errorForeground,#e81123);
+                  color: white; padding: 8px 20px; border: none; cursor: pointer; font-size: 12px;
+                  border-radius: 4px; font-family: var(--vscode-font-family); }
+    .btn-danger:hover { opacity: 0.9; }
 </style>
 </head>
 <body>
@@ -650,7 +855,7 @@ function renderPanel(data) {
     <div class="main-content">
         <div class="column">
             <div class="section">
-                <div class="section-title">全局模型 <span class="badge">所有项目默认</span> <button class="btn btn-add" onclick="openAdd()">+ 添加预设</button></div>
+                <div class="section-title">全局模型 <span class="badge">所有项目默认</span> <button class="btn btn-add" onclick="openAddProvider()">+ 添加供应商</button></div>
                 <div class="presets">${globalHtml}</div>
                 <div class="env-section">
                     <div class="env-title">环境变量</div>
@@ -668,141 +873,292 @@ function renderPanel(data) {
     </div>
 
     <div class="btn-row">
-        <button class="btn btn-secondary" onclick="editSettings()">编辑全局 settings.json</button>
-        <button class="btn btn-outline" onclick="editEnvs()">编辑预设</button>
-        ${wsRoot ? '<button class="btn btn-outline" onclick="editProjectSettings()">编辑项目配置</button>' : ''}
+        <button class="btn btn-secondary" data-cmd="editSettings">编辑全局 settings.json</button>
+        <button class="btn btn-outline" data-cmd="editEnvs">编辑预设</button>
+        ${wsRoot ? '<button class="btn btn-outline" data-cmd="editProjectSettings">编辑项目配置</button>' : ''}
     </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none;">
   <div class="modal">
-    <div class="modal-title" id="modalTitle">添加预设</div>
+    <div class="modal-title" id="modalTitle">添加供应商</div>
     <div class="modal-body">
-      <div class="form-group" id="fgTemplate">
-        <label class="form-label">基于预设</label>
-        <select class="form-select" id="templatePreset" onchange="onTemplateChange()">
-          <option value="">从零开始</option>
-        </select>
+      <!-- 供应商字段 -->
+      <div id="providerFields">
+        <div class="form-group">
+          <label class="form-label">供应商 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+          <input class="form-input" id="providerId" placeholder="例如: dashscope" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">供应商名称</label>
+          <input class="form-input" id="providerLabel" placeholder="例如: DashScope" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述</label>
+          <input class="form-input" id="providerDesc" placeholder="供应商描述" />
+        </div>
+        <div class="form-group" id="initialModelGroup">
+          <label class="form-label">初始模型 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+          <input class="form-input" id="initialModelId" placeholder="例如: my-model" />
+          <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px;">添加供应商后将自动创建此模型</div>
+        </div>
+        <div class="form-divider"></div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_AUTH_TOKEN</label>
+          <input class="form-input" type="password" id="authToken" placeholder="输入 API Token" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_BASE_URL</label>
+          <input class="form-input" id="baseUrl" placeholder="https://..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">API_TIMEOUT_MS</label>
+          <input class="form-input" id="apiTimeout" placeholder="300000" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC</label>
+          <input class="form-input" id="disableTraffic" placeholder="1" />
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">名称 <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
-        <input class="form-input" id="presetLabel" oninput="onLabelChange()" placeholder="例如: cc:MyModel" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">描述</label>
-        <input class="form-input" id="presetDesc" oninput="this._manual=true" placeholder="例如: DashScope MyModel" />
-      </div>
-      <div class="form-divider"></div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_MODEL <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
-        <input class="form-input" id="anthropicModel" oninput="onModelChange()" placeholder="例如: qwen3.6-plus" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_DEFAULT_SONNET_MODEL <span class="form-hint" id="hintSonnet">与 ANTHROPIC_MODEL 同步</span></label>
-        <input class="form-input field-synced" id="sonnetModel" oninput="onSubModelChange('sonnet')" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_DEFAULT_OPUS_MODEL <span class="form-hint" id="hintOpus">与 ANTHROPIC_MODEL 同步</span></label>
-        <input class="form-input field-synced" id="opusModel" oninput="onSubModelChange('opus')" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_DEFAULT_HAIKU_MODEL <span class="form-hint" id="hintHaiku">与 ANTHROPIC_MODEL 同步</span></label>
-        <input class="form-input field-synced" id="haikuModel" oninput="onSubModelChange('haiku')" />
-      </div>
-      <div class="form-divider"></div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_AUTH_TOKEN</label>
-        <input class="form-input" type="password" id="authToken" placeholder="输入 API Token" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">ANTHROPIC_BASE_URL</label>
-        <input class="form-input" id="baseUrl" placeholder="https://..." />
-      </div>
-      <div class="form-group">
-        <label class="form-label">API_TIMEOUT_MS</label>
-        <input class="form-input" id="apiTimeout" placeholder="300000" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC</label>
-        <input class="form-input" id="disableTraffic" placeholder="1" />
+      <!-- 模型字段（在添加/编辑模型时显示） -->
+      <div id="modelFields" style="display:none;">
+        <div class="form-divider"></div>
+        <div class="form-group" id="modelProviderGroup">
+          <label class="form-label">所属供应商</label>
+          <select class="form-select" id="modelProvider"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">模型 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+          <input class="form-input" id="presetLabel" placeholder="例如: my-model" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述</label>
+          <input class="form-input" id="presetDesc" placeholder="模型描述" />
+        </div>
+        <div class="form-divider"></div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_MODEL <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+          <input class="form-input" id="anthropicModel" oninput="onModelChange()" placeholder="例如: qwen3.6-plus" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_DEFAULT_SONNET_MODEL <span class="form-hint" id="hintSonnet">与 ANTHROPIC_MODEL 同步</span></label>
+          <input class="form-input field-synced" id="sonnetModel" oninput="onSubModelChange('sonnet')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_DEFAULT_OPUS_MODEL <span class="form-hint" id="hintOpus">与 ANTHROPIC_MODEL 同步</span></label>
+          <input class="form-input field-synced" id="opusModel" oninput="onSubModelChange('opus')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">ANTHROPIC_DEFAULT_HAIKU_MODEL <span class="form-hint" id="hintHaiku">与 ANTHROPIC_MODEL 同步</span></label>
+          <input class="form-input field-synced" id="haikuModel" oninput="onSubModelChange('haiku')" />
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="savePreset()">保存</button>
+      <button class="btn btn-primary" onclick="saveModal()">保存</button>
     </div>
   </div>
 </div>
 
-<script id="presets-data" type="application/json">${JSON.stringify(presets)}</script>
+<!-- 确认弹窗 -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-body">
+      <div class="confirm-icon">⚠️</div>
+      <div class="confirm-title" id="confirmTitle">确认删除</div>
+      <div class="confirm-desc" id="confirmDesc">确定要删除吗？</div>
+    </div>
+    <div class="confirm-footer">
+      <button class="btn btn-outline" id="confirmCancel">取消</button>
+      <button class="btn btn-danger" data-cmd="confirmDelete">删除</button>
+    </div>
+  </div>
+</div>
+
+<script id="providers-data" type="application/json">${JSON.stringify(providers)}</script>
 <script>
 (function(){
 const vscode = acquireVsCodeApi();
-const allPresets = JSON.parse(document.getElementById('presets-data').textContent);
+var allProviders = JSON.parse(document.getElementById('providers-data').textContent);
 
-let editingLabel = null;
-let dirty = { sonnet: false, opus: false, haiku: false };
+// 编辑模式: 'addProvider' | 'editProvider' | 'addModel' | 'editModel'
+var editMode = 'addProvider';
+var editTargetId = null;
+var editProviderId = null;
+var dirty = { sonnet: false, opus: false, haiku: false };
+var pendingConfirm = null;
 
-window.switchGlobal = function(id) { vscode.postMessage({command:'switchGlobal',presetId:id}); };
-window.switchProject = function(id) { vscode.postMessage({command:'switchProject',presetId:id}); };
-window.followGlobal = function() { vscode.postMessage({command:'followGlobal'}); };
-window.editSettings = function() { vscode.postMessage({command:'editSettings'}); };
-window.editEnvs = function() { vscode.postMessage({command:'editEnvs'}); };
-window.editProjectSettings = function() { vscode.postMessage({command:'editProjectSettings'}); };
+// ==================== 确认弹窗 ====================
+function showConfirm(title, desc, fn) {
+  pendingConfirm = fn;
+  byId('confirmTitle').textContent = title;
+  byId('confirmDesc').textContent = desc;
+  byId('confirmOverlay').style.display = 'flex';
+}
+function closeConfirm() {
+  pendingConfirm = null;
+  byId('confirmOverlay').style.display = 'none';
+}
+
+// ==================== 事件委托：所有 data-cmd 点击 ====================
+document.addEventListener('click', function(e) {
+  var el = e.target.closest('[data-cmd]');
+  if (!el) return;
+  e.stopPropagation();
+  var cmd = el.getAttribute('data-cmd');
+  var id = el.getAttribute('data-id');
+
+  switch (cmd) {
+    case 'switchGlobal': vscode.postMessage({command:'switchGlobal',presetId:id}); break;
+    case 'switchProject': vscode.postMessage({command:'switchProject',presetId:id}); break;
+    case 'followGlobal': vscode.postMessage({command:'followGlobal'}); break;
+    case 'editSettings': vscode.postMessage({command:'editSettings'}); break;
+    case 'editEnvs': vscode.postMessage({command:'editEnvs'}); break;
+    case 'editProjectSettings': vscode.postMessage({command:'editProjectSettings'}); break;
+    case 'editModel': openEditModel(id); break;
+    case 'delModel':
+      var _modelId = id;
+      var found = getModelById(_modelId);
+      if (found) showConfirm('删除模型', '确定要删除模型 "' + (found.model.label || found.model.id) + '" 吗？', function() {
+        vscode.postMessage({command:'deleteModel',modelId:_modelId});
+      });
+      break;
+    case 'editProvider': openEditProvider(id); break;
+    case 'delProvider':
+      var _providerId = id;
+      var p = getProviderById(_providerId);
+      if (p) showConfirm('删除供应商', '确定要删除供应商 "' + (p.label || p.id) + '" 及其下所有模型吗？', function() {
+        vscode.postMessage({command:'deleteProvider',providerId:_providerId});
+      });
+      break;
+    case 'addModel': openAddModel(id); break;
+    case 'toggle':
+      var header = el;
+      var models = header.parentNode && header.parentNode.querySelector('.provider-models');
+      var toggle = header.querySelector('.provider-toggle');
+      if (models && toggle) {
+        var collapsed = models.classList.toggle('collapsed');
+        toggle.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+      }
+      break;
+    case 'confirmDelete':
+      if (typeof pendingConfirm === 'function') pendingConfirm();
+      closeConfirm();
+      break;
+  }
+});
 
 function byId(id) { return document.getElementById(id); }
 
-function populateTemplateDropdown() {
-  var sel = byId('templatePreset');
-  sel.innerHTML = '<option value="">从零开始</option>';
-  allPresets.forEach(function(p) {
-    sel.innerHTML += '<option value="' + p.id + '">' + p.id + '</option>';
-  });
+function getModelById(id) {
+  for (var i = 0; i < allProviders.length; i++) {
+    for (var j = 0; j < allProviders[i].models.length; j++) {
+      if (allProviders[i].models[j].id === id) return { provider: allProviders[i], model: allProviders[i].models[j] };
+    }
+  }
+  return null;
 }
 
-window.openAdd = function() {
-  editingLabel = null;
-  byId('modalTitle').textContent = '添加预设';
-  byId('fgTemplate').style.display = '';
-  populateTemplateDropdown();
-  byId('templatePreset').value = '';
+function getProviderById(id) {
+  for (var i = 0; i < allProviders.length; i++) {
+    if (allProviders[i].id === id) return allProviders[i];
+  }
+  return null;
+}
+
+function populateProviderSelect(selectedId) {
+  var sel = byId('modelProvider');
+  sel.innerHTML = '';
+  allProviders.forEach(function(p) {
+    var opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.label || p.id;
+    sel.appendChild(opt);
+  });
+  if (selectedId) sel.value = selectedId;
+}
+
+// ==================== 打开弹窗 ====================
+window.openAddProvider = function() {
+  editMode = 'addProvider';
+  editTargetId = null;
+  byId('modalTitle').textContent = '添加供应商';
+  byId('providerFields').style.display = '';
+  byId('initialModelGroup').style.display = '';
+  byId('modelFields').style.display = 'none';
   clearForm();
   byId('modalOverlay').style.display = 'flex';
 };
 
-window.openEdit = function(id) {
-  editingLabel = id;
-  var p = allPresets.find(function(x) { return x.id === id; });
+window.openEditProvider = function(id) {
+  editMode = 'editProvider';
+  editTargetId = id;
+  var p = getProviderById(id);
   if (!p) return;
-  byId('modalTitle').textContent = '编辑预设';
-  byId('fgTemplate').style.display = 'none';
+  byId('modalTitle').textContent = '编辑供应商';
+  byId('providerFields').style.display = '';
+  byId('initialModelGroup').style.display = 'none';
+  byId('modelFields').style.display = 'none';
+  byId('providerId').value = p.id;
+  byId('providerId').readOnly = true;
+  byId('providerLabel').value = p.label || '';
+  byId('providerDesc').value = p.description || '';
+  var e = p.env || {};
+  byId('authToken').value = e.ANTHROPIC_AUTH_TOKEN || '';
+  byId('baseUrl').value = e.ANTHROPIC_BASE_URL || '';
+  byId('apiTimeout').value = e.API_TIMEOUT_MS || '';
+  byId('disableTraffic').value = e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || '';
   byId('modalOverlay').style.display = 'flex';
-  fillForm(p);
 };
 
-window.delPreset = function(id) {
-  if (!confirm('确定删除预设 "' + id + '" 吗？此操作不可撤销。')) return;
-  vscode.postMessage({command:'deletePreset',presetId:id});
+window.openAddModel = function(providerId) {
+  editMode = 'addModel';
+  editTargetId = null;
+  editProviderId = providerId || (allProviders.length > 0 ? allProviders[0].id : null);
+  byId('modalTitle').textContent = '添加模型';
+  byId('providerFields').style.display = 'none';
+  byId('modelFields').style.display = '';
+  byId('modelProviderGroup').style.display = '';
+  clearForm();
+  populateProviderSelect(editProviderId);
+  byId('modalOverlay').style.display = 'flex';
+};
+
+window.openEditModel = function(id) {
+  editMode = 'editModel';
+  editTargetId = id;
+  var found = getModelById(id);
+  if (!found) return;
+  editProviderId = found.provider.id;
+  byId('modalTitle').textContent = '编辑模型';
+  byId('providerFields').style.display = 'none';
+  byId('modelFields').style.display = '';
+  byId('modelProviderGroup').style.display = 'none';
+  populateProviderSelect(found.provider.id);
+  var m = found.model;
+  byId('presetLabel').value = m.id;
+  byId('presetDesc').value = m.description || '';
+  var e = m.env || {};
+  byId('anthropicModel').value = e.ANTHROPIC_MODEL || '';
+  var modelVal = e.ANTHROPIC_MODEL || '';
+  byId('sonnetModel').value = e.ANTHROPIC_DEFAULT_SONNET_MODEL || '';
+  byId('opusModel').value = e.ANTHROPIC_DEFAULT_OPUS_MODEL || '';
+  byId('haikuModel').value = e.ANTHROPIC_DEFAULT_HAIKU_MODEL || '';
+  dirty.sonnet = !!e.ANTHROPIC_DEFAULT_SONNET_MODEL && e.ANTHROPIC_DEFAULT_SONNET_MODEL !== modelVal;
+  dirty.opus = !!e.ANTHROPIC_DEFAULT_OPUS_MODEL && e.ANTHROPIC_DEFAULT_OPUS_MODEL !== modelVal;
+  dirty.haiku = !!e.ANTHROPIC_DEFAULT_HAIKU_MODEL && e.ANTHROPIC_DEFAULT_HAIKU_MODEL !== modelVal;
+  updateFieldUI('sonnet', dirty.sonnet);
+  updateFieldUI('opus', dirty.opus);
+  updateFieldUI('haiku', dirty.haiku);
+  byId('modalOverlay').style.display = 'flex';
 };
 
 window.closeModal = function() {
   byId('modalOverlay').style.display = 'none';
 };
 
-window.onTemplateChange = function() {
-  var val = byId('templatePreset').value;
-  if (!val) { clearForm(); return; }
-  var p = allPresets.find(function(x) { return x.id === val; });
-  if (p) fillForm(p);
-};
-
-window.onLabelChange = function() {
-  var descInput = byId('presetDesc');
-  if (editingLabel === null && !descInput._manual) {
-    descInput.value = byId('presetLabel').value;
-  }
-};
-
+// ==================== 表单逻辑 ====================
 window.onModelChange = function() {
   var v = byId('anthropicModel').value;
   if (!dirty.sonnet) byId('sonnetModel').value = v;
@@ -814,80 +1170,6 @@ window.onSubModelChange = function(field) {
   dirty[field] = true;
   updateFieldUI(field, true);
 };
-
-window.savePreset = function() {
-  var label = byId('presetLabel').value.trim();
-  var model = byId('anthropicModel').value.trim();
-  if (!label) { alert('请输入名称'); return; }
-  if (!model) { alert('请输入 ANTHROPIC_MODEL'); return; }
-
-  var preset = {
-    id: label,
-    description: byId('presetDesc').value.trim() || label,
-    env: {
-      ANTHROPIC_MODEL: model,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: byId('sonnetModel').value.trim(),
-      ANTHROPIC_DEFAULT_OPUS_MODEL: byId('opusModel').value.trim(),
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: byId('haikuModel').value.trim(),
-      ANTHROPIC_AUTH_TOKEN: byId('authToken').value.trim(),
-      ANTHROPIC_BASE_URL: byId('baseUrl').value.trim(),
-      API_TIMEOUT_MS: byId('apiTimeout').value.trim(),
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: byId('disableTraffic').value.trim()
-    }
-  };
-
-  if (editingLabel) {
-    vscode.postMessage({command:'updatePreset',presetId:editingLabel,preset:preset});
-  } else {
-    var exists = allPresets.find(function(p) { return p.id === label; });
-    if (exists) { alert('预设 "' + label + '" 已存在'); return; }
-    vscode.postMessage({command:'addPreset',preset:preset});
-  }
-};
-
-function fillForm(p) {
-  byId('presetLabel').value = p.id;
-  byId('presetDesc').value = p.description || '';
-  byId('presetDesc')._manual = !!p.description;
-  var e = p.env || {};
-  byId('anthropicModel').value = e.ANTHROPIC_MODEL || '';
-  var modelVal = e.ANTHROPIC_MODEL || '';
-  byId('sonnetModel').value = e.ANTHROPIC_DEFAULT_SONNET_MODEL || '';
-  byId('opusModel').value = e.ANTHROPIC_DEFAULT_OPUS_MODEL || '';
-  byId('haikuModel').value = e.ANTHROPIC_DEFAULT_HAIKU_MODEL || '';
-  byId('authToken').value = e.ANTHROPIC_AUTH_TOKEN || '';
-  byId('baseUrl').value = e.ANTHROPIC_BASE_URL || '';
-  byId('apiTimeout').value = e.API_TIMEOUT_MS || '';
-  byId('disableTraffic').value = e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || '';
-
-  dirty.sonnet = !!e.ANTHROPIC_DEFAULT_SONNET_MODEL && e.ANTHROPIC_DEFAULT_SONNET_MODEL !== modelVal;
-  dirty.opus = !!e.ANTHROPIC_DEFAULT_OPUS_MODEL && e.ANTHROPIC_DEFAULT_OPUS_MODEL !== modelVal;
-  dirty.haiku = !!e.ANTHROPIC_DEFAULT_HAIKU_MODEL && e.ANTHROPIC_DEFAULT_HAIKU_MODEL !== modelVal;
-
-  updateFieldUI('sonnet', dirty.sonnet);
-  updateFieldUI('opus', dirty.opus);
-  updateFieldUI('haiku', dirty.haiku);
-}
-
-function clearForm() {
-  byId('presetLabel').value = '';
-  byId('presetDesc').value = '';
-  byId('presetDesc')._manual = false;
-  byId('anthropicModel').value = '';
-  byId('sonnetModel').value = '';
-  byId('opusModel').value = '';
-  byId('haikuModel').value = '';
-  byId('authToken').value = '';
-  byId('baseUrl').value = '';
-  byId('apiTimeout').value = '';
-  byId('disableTraffic').value = '';
-  dirty.sonnet = false;
-  dirty.opus = false;
-  dirty.haiku = false;
-  updateFieldUI('sonnet', false);
-  updateFieldUI('opus', false);
-  updateFieldUI('haiku', false);
-}
 
 function updateFieldUI(field, isDirty) {
   var el = byId(field + 'Model');
@@ -905,9 +1187,102 @@ function updateFieldUI(field, isDirty) {
   }
 }
 
+function clearForm() {
+  byId('providerId').value = '';
+  byId('providerId').readOnly = false;
+  byId('providerLabel').value = '';
+  byId('providerDesc').value = '';
+  byId('initialModelId').value = '';
+  byId('authToken').value = '';
+  byId('baseUrl').value = '';
+  byId('apiTimeout').value = '';
+  byId('disableTraffic').value = '';
+  byId('presetLabel').value = '';
+  byId('presetDesc').value = '';
+  byId('anthropicModel').value = '';
+  byId('sonnetModel').value = '';
+  byId('opusModel').value = '';
+  byId('haikuModel').value = '';
+  dirty.sonnet = false;
+  dirty.opus = false;
+  dirty.haiku = false;
+  updateFieldUI('sonnet', false);
+  updateFieldUI('opus', false);
+  updateFieldUI('haiku', false);
+}
+
+// ==================== 保存 ====================
+window.saveModal = function() {
+  if (editMode === 'addProvider' || editMode === 'editProvider') {
+    var pid = byId('providerId').value.trim();
+    if (!pid) { alert('请输入供应商 ID'); return; }
+
+    var provider = {
+      id: pid,
+      label: byId('providerLabel').value.trim() || pid,
+      description: byId('providerDesc').value.trim() || '',
+      env: {},
+      models: []
+    };
+    var token = byId('authToken').value.trim();
+    var url = byId('baseUrl').value.trim();
+    var timeout = byId('apiTimeout').value.trim();
+    var disable = byId('disableTraffic').value.trim();
+    if (token) provider.env.ANTHROPIC_AUTH_TOKEN = token;
+    if (url) provider.env.ANTHROPIC_BASE_URL = url;
+    if (timeout) provider.env.API_TIMEOUT_MS = timeout;
+    if (disable) provider.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = disable;
+
+    if (editMode === 'addProvider') {
+      var modelId = byId('initialModelId').value.trim();
+      if (!modelId) { alert('请输入初始模型 ID'); return; }
+      var model = { id: modelId, label: modelId, description: '', env: {} };
+      vscode.postMessage({command:'addProvider', provider: provider, model: model});
+    } else {
+      vscode.postMessage({command:'updateProvider', providerId: editTargetId, provider: provider});
+    }
+    closeModal();
+    return;
+  }
+
+  if (editMode === 'addModel' || editMode === 'editModel') {
+    var label = byId('presetLabel').value.trim();
+    var modelName = byId('anthropicModel').value.trim();
+    if (!label) { alert('请输入模型 ID'); return; }
+    if (!modelName) { alert('请输入 ANTHROPIC_MODEL'); return; }
+
+    var model = {
+      id: label,
+      label: label,
+      description: byId('presetDesc').value.trim() || '',
+      env: {}
+    };
+    model.env.ANTHROPIC_MODEL = modelName;
+    var s = byId('sonnetModel').value.trim();
+    var o = byId('opusModel').value.trim();
+    var h = byId('haikuModel').value.trim();
+    if (s) model.env.ANTHROPIC_DEFAULT_SONNET_MODEL = s;
+    if (o) model.env.ANTHROPIC_DEFAULT_OPUS_MODEL = o;
+    if (h) model.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = h;
+
+    if (editMode === 'addModel') {
+      var pId = byId('modelProvider').value;
+      vscode.postMessage({command:'addModel', providerId: pId, model: model});
+    } else {
+      vscode.postMessage({command:'updateModel', modelId: editTargetId, model: model});
+    }
+    closeModal();
+    return;
+  }
+};
+
 byId('modalOverlay').addEventListener('click', function(e) {
   if (e.target === byId('modalOverlay')) closeModal();
 });
+byId('confirmOverlay').addEventListener('click', function(e) {
+  if (e.target === byId('confirmOverlay')) closeConfirm();
+});
+byId('confirmCancel').addEventListener('click', closeConfirm);
 })();
 </script>
 </body>
