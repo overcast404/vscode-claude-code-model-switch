@@ -42,22 +42,22 @@ const fs = __importStar(require("fs"));
 
 // ==================== 默认预设（兜底） ====================
 const DEFAULT_PRESETS = [
-    { id: 'qwen', label: 'cc:qwen3.6-plus', description: 'DashScope qwen3.6-plus',
+    { id: 'cc:qwen3.6-plus', description: 'DashScope qwen3.6-plus',
       env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
         API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         ANTHROPIC_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus', ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus' } },
-    { id: 'glm5', label: 'cc:GLM-5', description: 'DashScope GLM-5',
+    { id: 'cc:GLM-5', description: 'DashScope GLM-5',
       env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
         API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         ANTHROPIC_MODEL: 'glm-5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5' } },
-    { id: 'kimi', label: 'cc:kimi-k2.5', description: 'DashScope kimi-k2.5',
+    { id: 'cc:kimi-k2.5', description: 'DashScope kimi-k2.5',
       env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
         API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         ANTHROPIC_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5', ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5' } },
-    { id: 'minimax', label: 'cc:MiniMax-M2.5', description: 'DashScope MiniMax-M2.5',
+    { id: 'cc:MiniMax-M2.5', description: 'DashScope MiniMax-M2.5',
       env: { ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
         API_TIMEOUT_MS: '300000', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         ANTHROPIC_MODEL: 'MiniMax-M2.5', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
@@ -137,17 +137,16 @@ function getProjectPreset(wsRoot) {
     const settings = readJSON(projectPath);
     if (!settings) return null;
 
-    const presetId = settings.presetId || '';
+    const presetLabel = settings.presetId || '';
 
     // 情况1: 有 presetId，尝试匹配预设
-    if (presetId) {
-        const matched = matchPreset(presetId);
+    if (presetLabel) {
+        const matched = matchPreset(presetLabel);
         if (matched) return matched;
         // presetId 存在但匹配不到预设，返回孤立配置标记
         if (settings.env && Object.keys(settings.env).length > 0) {
             return {
-                id: presetId,
-                label: `(预设丢失: ${presetId})`,
+                id: `(预设丢失: ${presetLabel})`,
                 description: '预设已被删除，环境变量仍在生效',
                 env: settings.env,
                 _orphaned: true
@@ -160,8 +159,7 @@ function getProjectPreset(wsRoot) {
     // 情况2: 没有 presetId 但有 env，视为自定义配置
     if (settings.env && Object.keys(settings.env).length > 0) {
         return {
-            id: '_custom_',
-            label: '自定义配置',
+            id: '自定义配置',
             description: '手动配置的环境变量',
             env: settings.env,
             _custom: true
@@ -194,7 +192,7 @@ async function switchGlobalPreset(preset) {
     settings.env = { ...preset.env };
     settings.presetId = preset.id;
     writeJSON(GLOBAL_SETTINGS_PATH, settings);
-    vscode.window.showInformationMessage(`全局模型已切换为: ${preset.label}`);
+    vscode.window.showInformationMessage(`全局模型已切换为: ${preset.id}`);
 }
 
 async function switchProjectPreset(wsRoot, preset) {
@@ -209,7 +207,7 @@ async function switchProjectPreset(wsRoot, preset) {
     existing.presetId = preset.id;
     writeJSON(projectPath, existing);
     addToGitignore(wsRoot);
-    vscode.window.showInformationMessage(`项目模型已设置为: ${preset.label}`);
+    vscode.window.showInformationMessage(`项目模型已设置为: ${preset.id}`);
 }
 
 async function restoreFollowGlobal(wsRoot) {
@@ -257,7 +255,7 @@ function updateStatusBar() {
     const wsRoot = getWorkspaceRoot();
     const { preset, source } = getActiveModel(wsRoot);
     const wsName = wsRoot ? path.basename(wsRoot) : '';
-    const label = preset?.label || '未设置';
+    const label = preset?.id || '未设置';
 
     let text, tooltip;
     if (source === 'project' || source === 'project_orphaned' || source === 'project_custom') {
@@ -285,8 +283,8 @@ async function showQuickActions() {
     const wsRoot = getWorkspaceRoot();
     const { preset, source } = getActiveModel(wsRoot);
     const currentDesc = source === 'project'
-        ? `${preset?.label || '未设置'} (项目独立)`
-        : `${preset?.label || '未设置'} (跟随全局)`;
+        ? `${preset?.id || '未设置'} (项目独立)`
+        : `${preset?.id || '未设置'} (跟随全局)`;
 
     const actions = [
         {
@@ -337,18 +335,18 @@ async function selectGlobalModel() {
     const items = [
         { label: '选择全局模型', kind: vscode.QuickPickItemKind.Separator },
         ...presets.map(p => ({
-            label: p.label,
+            label: p.id,
             description: p.description,
             detail: p.env.ANTHROPIC_BASE_URL,
             picked: globalPreset?.id === p.id
         }))
     ];
     const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: `当前全局: ${globalPreset?.label || '未设置'}`,
+        placeHolder: `当前全局: ${globalPreset?.id || '未设置'}`,
         matchOnDescription: true, matchOnDetail: true
     });
     if (!selected) return;
-    const preset = presets.find(p => p.label === selected.label);
+    const preset = presets.find(p => p.id === selected.label);
     if (preset) { await switchGlobalPreset(preset); updateStatusBar(); }
 }
 
@@ -361,18 +359,18 @@ async function selectProjectModel() {
     const items = [
         { label: `为项目选择模型`, kind: vscode.QuickPickItemKind.Separator },
         ...presets.map(p => ({
-            label: p.label,
+            label: p.id,
             description: p.description,
             detail: p.env.ANTHROPIC_BASE_URL,
             picked: projectPreset?.id === p.id
         }))
     ];
     const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: `当前项目: ${projectPreset?.label || '未设置（跟随全局）'}`,
+        placeHolder: `当前项目: ${projectPreset?.id || '未设置（跟随全局）'}`,
         matchOnDescription: true, matchOnDetail: true
     });
     if (!selected) return;
-    const preset = presets.find(p => p.label === selected.label);
+    const preset = presets.find(p => p.id === selected.label);
     if (preset) { await switchProjectPreset(wsRoot, preset); updateStatusBar(); }
 }
 
@@ -421,7 +419,7 @@ function showConfigPanel() {
         if (message.command === 'addPreset') {
             const allPresets = getAllPresets();
             if (allPresets.find(p => p.id === message.preset.id)) {
-                vscode.window.showErrorMessage(`预设 ID "${message.preset.id}" 已存在`);
+                vscode.window.showErrorMessage(`预设 "${message.preset.id}" 已存在`);
                 return;
             }
             allPresets.push(message.preset);
@@ -478,7 +476,7 @@ function presetHtml(p, isActive, clickFn, showActions, disableDelete) {
     return `
     <div class="preset ${isActive ? 'active' : ''}" onclick="${clickFn}('${p.id}')">
         <div class="preset-header">
-            <div class="preset-name">${p.label}</div>
+            <div class="preset-name">${p.id}</div>
             <div style="display:flex;align-items:center;gap:4px;">
                 ${isActive ? '<div class="badge-active">当前</div>' : ''}
                 ${actionsHtml}
@@ -529,7 +527,7 @@ function renderPanel(data) {
         projectHtml += `<div class="follow-item ${isFollowGlobal ? 'active' : ''}" onclick="followGlobal()">
                 <div class="follow-name">🔄 跟随全局</div>
                 ${isFollowGlobal ? '<div class="badge-active">当前</div>' : ''}
-                <div class="follow-desc">${globalPreset?.label || '未设置'}</div>
+                <div class="follow-desc">${globalPreset?.id || '未设置'}</div>
            </div>` +
           presets.map(p => presetHtml(p, projectPreset?.id === p.id && !isOrphaned && !isCustom, 'switchProject')).join('');
     } else {
@@ -545,7 +543,7 @@ function renderPanel(data) {
     } else if (source === 'project_custom') {
         sourceText = `📝 自定义配置 (${path.basename(wsRoot || '')})`;
     } else {
-        sourceText = `🔄 跟随全局 (${globalPreset?.label || '未设置'})`;
+        sourceText = `🔄 跟随全局 (${globalPreset?.id || '未设置'})`;
     }
 
     return `<!DOCTYPE html>
@@ -644,7 +642,7 @@ function renderPanel(data) {
     <div class="header">
         <div class="header-title">Claude Code 模型配置</div>
         <div class="header-current">
-            当前: <span class="header-current-active">${activePreset?.label || '未设置'}</span>
+            当前: <span class="header-current-active">${activePreset?.id || '未设置'}</span>
             <span style="margin-left:6px;">${sourceText}</span>
         </div>
     </div>
@@ -687,16 +685,12 @@ function renderPanel(data) {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">ID</label>
-        <input class="form-input" id="presetId" oninput="this._manual=true" placeholder="自动从名称生成" />
-      </div>
-      <div class="form-group">
         <label class="form-label">名称 <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
         <input class="form-input" id="presetLabel" oninput="onLabelChange()" placeholder="例如: cc:MyModel" />
       </div>
       <div class="form-group">
         <label class="form-label">描述</label>
-        <input class="form-input" id="presetDesc" placeholder="例如: DashScope MyModel" />
+        <input class="form-input" id="presetDesc" oninput="this._manual=true" placeholder="例如: DashScope MyModel" />
       </div>
       <div class="form-divider"></div>
       <div class="form-group">
@@ -746,7 +740,7 @@ function renderPanel(data) {
 const vscode = acquireVsCodeApi();
 const allPresets = JSON.parse(document.getElementById('presets-data').textContent);
 
-let editingId = null;
+let editingLabel = null;
 let dirty = { sonnet: false, opus: false, haiku: false };
 
 window.switchGlobal = function(id) { vscode.postMessage({command:'switchGlobal',presetId:id}); };
@@ -762,16 +756,14 @@ function populateTemplateDropdown() {
   var sel = byId('templatePreset');
   sel.innerHTML = '<option value="">从零开始</option>';
   allPresets.forEach(function(p) {
-    sel.innerHTML += '<option value="' + p.id + '">' + p.label + '</option>';
+    sel.innerHTML += '<option value="' + p.id + '">' + p.id + '</option>';
   });
 }
 
 window.openAdd = function() {
-  editingId = null;
+  editingLabel = null;
   byId('modalTitle').textContent = '添加预设';
   byId('fgTemplate').style.display = '';
-  byId('presetId').readOnly = false;
-  byId('presetId')._manual = false;
   populateTemplateDropdown();
   byId('templatePreset').value = '';
   clearForm();
@@ -779,13 +771,11 @@ window.openAdd = function() {
 };
 
 window.openEdit = function(id) {
-  editingId = id;
+  editingLabel = id;
   var p = allPresets.find(function(x) { return x.id === id; });
   if (!p) return;
   byId('modalTitle').textContent = '编辑预设';
   byId('fgTemplate').style.display = 'none';
-  byId('presetId').readOnly = true;
-  byId('presetId')._manual = true;
   byId('modalOverlay').style.display = 'flex';
   fillForm(p);
 };
@@ -807,9 +797,9 @@ window.onTemplateChange = function() {
 };
 
 window.onLabelChange = function() {
-  var idInput = byId('presetId');
-  if (!idInput._manual) {
-    idInput.value = byId('presetLabel').value.toLowerCase().replace(/[^a-z0-9\\-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  var descInput = byId('presetDesc');
+  if (editingLabel === null && !descInput._manual) {
+    descInput.value = byId('presetLabel').value;
   }
 };
 
@@ -831,12 +821,9 @@ window.savePreset = function() {
   if (!label) { alert('请输入名称'); return; }
   if (!model) { alert('请输入 ANTHROPIC_MODEL'); return; }
 
-  var id = byId('presetId').value.trim() || label.toLowerCase().replace(/[^a-z0-9\\-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
-
   var preset = {
-    id: id,
-    label: label,
-    description: byId('presetDesc').value.trim(),
+    id: label,
+    description: byId('presetDesc').value.trim() || label,
     env: {
       ANTHROPIC_MODEL: model,
       ANTHROPIC_DEFAULT_SONNET_MODEL: byId('sonnetModel').value.trim(),
@@ -849,19 +836,19 @@ window.savePreset = function() {
     }
   };
 
-  if (editingId) {
-    vscode.postMessage({command:'updatePreset',presetId:editingId,preset:preset});
+  if (editingLabel) {
+    vscode.postMessage({command:'updatePreset',presetId:editingLabel,preset:preset});
   } else {
-    var exists = allPresets.find(function(p) { return p.id === id; });
-    if (exists && !editingId) { alert('ID "' + id + '" 已存在，请修改名称或手动设置 ID'); return; }
+    var exists = allPresets.find(function(p) { return p.id === label; });
+    if (exists) { alert('预设 "' + label + '" 已存在'); return; }
     vscode.postMessage({command:'addPreset',preset:preset});
   }
 };
 
 function fillForm(p) {
-  byId('presetId').value = p.id;
-  byId('presetLabel').value = p.label;
+  byId('presetLabel').value = p.id;
   byId('presetDesc').value = p.description || '';
+  byId('presetDesc')._manual = !!p.description;
   var e = p.env || {};
   byId('anthropicModel').value = e.ANTHROPIC_MODEL || '';
   var modelVal = e.ANTHROPIC_MODEL || '';
@@ -883,10 +870,9 @@ function fillForm(p) {
 }
 
 function clearForm() {
-  byId('presetId').value = '';
-  byId('presetId')._manual = false;
   byId('presetLabel').value = '';
   byId('presetDesc').value = '';
+  byId('presetDesc')._manual = false;
   byId('anthropicModel').value = '';
   byId('sonnetModel').value = '';
   byId('opusModel').value = '';
