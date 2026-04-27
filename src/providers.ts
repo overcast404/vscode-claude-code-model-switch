@@ -14,7 +14,7 @@ export function flattenProviders(providers: Provider[]): FlatPreset[] {
 				description: m.description || p.description || '',
 				env: { ...(p.env || {}), ...(m.env || {}) },
 				_providerId: p.id,
-				_providerLabel: p.label || p.id
+				_providerLabel: p.id
 			});
 		}
 	}
@@ -41,7 +41,6 @@ export function migratePresetsToProviders(presets: LegacyPreset[]): Provider[] {
 		const pDesc = group[0].description || hostname;
 		return {
 			id: hostname.replace(/[^a-zA-Z0-9_-]/g, '_'),
-			label: hostname,
 			description: pDesc,
 			env: sharedEnv,
 			models: group.map(p => {

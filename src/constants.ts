@@ -12,7 +12,7 @@ export const GLOBAL_ENVS_PATH = path.join(os.homedir(), '.claude', 'envs.json');
 
 export const DEFAULT_PROVIDERS: Provider[] = [
 	{
-		id: 'dashscope', label: 'DashScope', description: '阿里云百炼 DashScope API',
+		id: 'dashscope', description: '阿里云百炼 DashScope API',
 		env: {
 			ANTHROPIC_AUTH_TOKEN: '',
 			ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',

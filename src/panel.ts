@@ -177,7 +177,7 @@ function providerGroupHtml(providers: Provider[], activeId: string | null, click
 		<div class="provider-group">
 			<div class="provider-header" data-cmd="toggle">
 				<span class="provider-toggle">&#9660;</span>
-				<span class="provider-name">${p.label || p.id}</span>
+				<span class="provider-name">${p.id}</span>
 				<span class="provider-badge">${p.models.length}</span>
 			</div>
 			<div class="provider-models">
@@ -217,7 +217,7 @@ function renderPanel(data: PanelData): string {
 		<div class="provider-group">
 			<div class="provider-header" data-cmd="toggle">
 				<span class="provider-toggle">&#9660;</span>
-				<span class="provider-name">${p.label || p.id}</span>
+				<span class="provider-name">${p.id}</span>
 				<span class="provider-badge">${p.models.length}</span>
 				<button class="pact" data-cmd="editProvider" data-id="${p.id}" title="编辑供应商">&#9998;</button>
 				<button class="pact pdel" data-cmd="delProvider" data-id="${p.id}" title="删除供应商"${disableProviderDel ? ' disabled' : ''}>&#10005;</button>
@@ -248,8 +248,8 @@ function renderPanel(data: PanelData): string {
 				<div class="follow-name">🔄 跟随全局</div>
 				${isFollowGlobal ? '<div class="badge-active">当前</div>' : ''}
 				<div class="follow-desc">${globalPreset?.id || '未设置'}</div>
-		   </div>` +
-		   providerGroupHtml(providers, projectPreset && !isOrphaned && !isCustom ? (projectPreset as FlatPreset).id : null, 'switchProject');
+			   </div>` +
+			   providerGroupHtml(providers, projectPreset && !isOrphaned && !isCustom ? (projectPreset as FlatPreset).id : null, 'switchProject');
 	} else {
 		projectHtml = '<div class="no-workspace">请先打开一个项目文件夹</div>';
 	}
@@ -420,16 +420,12 @@ function renderPanel(data: PanelData): string {
 	  <!-- 供应商字段 -->
 	  <div id="providerFields">
 		<div class="form-group">
-		  <label class="form-label">供应商 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
-		  <input class="form-input" id="providerId" placeholder="例如: dashscope" />
-		</div>
-		<div class="form-group">
-		  <label class="form-label">供应商名称</label>
-		  <input class="form-input" id="providerLabel" placeholder="例如: DashScope" />
+		  <label class="form-label">名称 <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
+		  <input class="form-input" id="providerId" placeholder="例如: DashScope" oninput="onProviderNameChange()" />
 		</div>
 		<div class="form-group">
 		  <label class="form-label">描述</label>
-		  <input class="form-input" id="providerDesc" placeholder="供应商描述" />
+		  <input class="form-input" id="providerDesc" placeholder="供应商描述" oninput="onProviderDescChange()" />
 		</div>
 		<div class="form-group" id="initialModelGroup">
 		  <label class="form-label">初始模型 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
@@ -463,11 +459,11 @@ function renderPanel(data: PanelData): string {
 		</div>
 		<div class="form-group">
 		  <label class="form-label">模型 ID <span style="color:var(--vscode-inputValidation-errorForeground)">*</span></label>
-		  <input class="form-input" id="presetLabel" placeholder="例如: my-model" />
+		  <input class="form-input" id="presetLabel" placeholder="例如: my-model" oninput="onModelNameChange()" />
 		</div>
 		<div class="form-group">
 		  <label class="form-label">描述</label>
-		  <input class="form-input" id="presetDesc" placeholder="模型描述" />
+		  <input class="form-input" id="presetDesc" placeholder="模型描述" oninput="onModelDescChange()" />
 		</div>
 		<div class="form-divider"></div>
 		<div class="form-group">
@@ -520,7 +516,7 @@ var allProviders = JSON.parse(document.getElementById('providers-data').textCont
 var editMode = 'addProvider';
 var editTargetId = null;
 var editProviderId = null;
-var dirty = { sonnet: false, opus: false, haiku: false };
+var dirty = { sonnet: false, opus: false, haiku: false, providerDesc: false, modelDesc: false };
 var pendingConfirm = null;
 
 // ==================== 确认弹窗 ====================
@@ -562,7 +558,7 @@ document.addEventListener('click', function(e) {
 	case 'delProvider':
 	  var _providerId = id;
 	  var p = getProviderById(_providerId);
-	  if (p) showConfirm('删除供应商', '确定要删除供应商 "' + (p.label || p.id) + '" 及其下所有模型吗？', function() {
+	  if (p) showConfirm('删除供应商', '确定要删除供应商 "' + (p.id) + '" 及其下所有模型吗？', function() {
 		vscode.postMessage({command:'deleteProvider',providerId:_providerId});
 	  });
 	  break;
@@ -607,7 +603,7 @@ function populateProviderSelect(selectedId) {
   allProviders.forEach(function(p) {
 	var opt = document.createElement('option');
 	opt.value = p.id;
-	opt.textContent = p.label || p.id;
+	opt.textContent = p.id;
 	sel.appendChild(opt);
   });
   if (selectedId) sel.value = selectedId;
@@ -636,8 +632,8 @@ window.openEditProvider = function(id) {
   byId('modelFields').style.display = 'none';
   byId('providerId').value = p.id;
   byId('providerId').readOnly = true;
-  byId('providerLabel').value = p.label || '';
   byId('providerDesc').value = p.description || '';
+  dirty.providerDesc = !!(p.description) && p.description !== p.id;
   var e = p.env || {};
   byId('authToken').value = e.ANTHROPIC_AUTH_TOKEN || '';
   byId('baseUrl').value = e.ANTHROPIC_BASE_URL || '';
@@ -673,6 +669,7 @@ window.openEditModel = function(id) {
   var m = found.model;
   byId('presetLabel').value = m.id;
   byId('presetDesc').value = m.description || '';
+  dirty.modelDesc = !!(m.description) && m.description !== m.id;
   var e = m.env || {};
   byId('anthropicModel').value = e.ANTHROPIC_MODEL || '';
   var modelVal = e.ANTHROPIC_MODEL || '';
@@ -705,6 +702,26 @@ window.onSubModelChange = function(field) {
   updateFieldUI(field, true);
 };
 
+window.onProviderNameChange = function() {
+  if (!dirty.providerDesc) {
+	byId('providerDesc').value = byId('providerId').value;
+  }
+};
+
+window.onProviderDescChange = function() {
+  dirty.providerDesc = true;
+};
+
+window.onModelNameChange = function() {
+  if (!dirty.modelDesc) {
+	byId('presetDesc').value = byId('presetLabel').value;
+  }
+};
+
+window.onModelDescChange = function() {
+  dirty.modelDesc = true;
+};
+
 function updateFieldUI(field, isDirty) {
   var el = byId(field + 'Model');
   var hint = byId('hint' + field.charAt(0).toUpperCase() + field.slice(1));
@@ -724,7 +741,6 @@ function updateFieldUI(field, isDirty) {
 function clearForm() {
   byId('providerId').value = '';
   byId('providerId').readOnly = false;
-  byId('providerLabel').value = '';
   byId('providerDesc').value = '';
   byId('initialModelId').value = '';
   byId('authToken').value = '';
@@ -740,6 +756,8 @@ function clearForm() {
   dirty.sonnet = false;
   dirty.opus = false;
   dirty.haiku = false;
+  dirty.providerDesc = false;
+  dirty.modelDesc = false;
   updateFieldUI('sonnet', false);
   updateFieldUI('opus', false);
   updateFieldUI('haiku', false);
@@ -749,11 +767,10 @@ function clearForm() {
 window.saveModal = function() {
   if (editMode === 'addProvider' || editMode === 'editProvider') {
 	var pid = byId('providerId').value.trim();
-	if (!pid) { alert('请输入供应商 ID'); return; }
+	if (!pid) { alert('请输入名称'); return; }
 
 	var provider = {
 	  id: pid,
-	  label: byId('providerLabel').value.trim() || pid,
 	  description: byId('providerDesc').value.trim() || '',
 	  env: {},
 	  models: []
@@ -770,7 +787,16 @@ window.saveModal = function() {
 	if (editMode === 'addProvider') {
 	  var modelId = byId('initialModelId').value.trim();
 	  if (!modelId) { alert('请输入初始模型 ID'); return; }
-	  var model = { id: modelId, label: modelId, description: '', env: {} };
+	  var model = {
+		id: modelId, label: modelId,
+		description: modelId,
+		env: {
+		  ANTHROPIC_MODEL: modelId,
+		  ANTHROPIC_DEFAULT_SONNET_MODEL: modelId,
+		  ANTHROPIC_DEFAULT_OPUS_MODEL: modelId,
+		  ANTHROPIC_DEFAULT_HAIKU_MODEL: modelId
+		}
+	  };
 	  vscode.postMessage({command:'addProvider', provider: provider, model: model});
 	} else {
 	  vscode.postMessage({command:'updateProvider', providerId: editTargetId, provider: provider});

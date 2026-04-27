@@ -11,7 +11,6 @@ export interface Model {
 
 export interface Provider {
 	id: string;
-	label: string;
 	description: string;
 	env: Record<string, string>;
 	models: Model[];
