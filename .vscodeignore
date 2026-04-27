@@ -1,3 +1,5 @@
 .vscode/**
 .claude/**
 *.vsix
+src/**
+tsconfig.json

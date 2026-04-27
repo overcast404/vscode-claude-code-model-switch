@@ -3,3 +3,12 @@
 .claude/settings.json
 .claude/envs.json
 .claude/settings.local.json
+
+# 依赖
+node_modules/
+
+# 编译输出
+out/
+
+# VS Code 扩展包
+*.vsix
