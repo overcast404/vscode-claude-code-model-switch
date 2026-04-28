@@ -26,7 +26,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
 					ANTHROPIC_MODEL: 'qwen3.6-plus',
 					ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.6-plus',
 					ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.6-plus',
-					ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus'
+					ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.6-plus',
+					CLAUDE_CODE_SUBAGENT_MODEL: 'qwen3.6-plus',
+					CLAUDE_CODE_EFFORT_LEVEL: 'max'
 				}
 			},
 			{
@@ -35,7 +37,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
 					ANTHROPIC_MODEL: 'glm-5',
 					ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5',
 					ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5',
-					ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5'
+					ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5',
+					CLAUDE_CODE_SUBAGENT_MODEL: 'glm-5',
+					CLAUDE_CODE_EFFORT_LEVEL: 'max'
 				}
 			},
 			{
@@ -44,7 +48,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
 					ANTHROPIC_MODEL: 'kimi-k2.5',
 					ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
 					ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5',
-					ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5'
+					ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5',
+					CLAUDE_CODE_SUBAGENT_MODEL: 'kimi-k2.5',
+					CLAUDE_CODE_EFFORT_LEVEL: 'max'
 				}
 			},
 			{
@@ -53,7 +59,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
 					ANTHROPIC_MODEL: 'MiniMax-M2.5',
 					ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
 					ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5',
-					ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5'
+					ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5',
+					CLAUDE_CODE_SUBAGENT_MODEL: 'MiniMax-M2.5',
+					CLAUDE_CODE_EFFORT_LEVEL: 'max'
 				}
 			}
 		]

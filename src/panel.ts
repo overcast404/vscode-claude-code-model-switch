@@ -482,6 +482,14 @@ function renderPanel(data: PanelData): string {
 		  <label class="form-label">ANTHROPIC_DEFAULT_HAIKU_MODEL <span class="form-hint" id="hintHaiku">与 ANTHROPIC_MODEL 同步</span></label>
 		  <input class="form-input field-synced" id="haikuModel" oninput="onSubModelChange('haiku')" />
 		</div>
+		<div class="form-group">
+		  <label class="form-label">CLAUDE_CODE_SUBAGENT_MODEL</label>
+		  <input class="form-input" id="subagentModel" placeholder="留空则使用 ANTHROPIC_MODEL" />
+		</div>
+		<div class="form-group">
+		  <label class="form-label">CLAUDE_CODE_EFFORT_LEVEL</label>
+		  <input class="form-input" id="effortLevel" placeholder="max" />
+		</div>
 	  </div>
 	</div>
 	<div class="modal-footer">
@@ -682,6 +690,8 @@ window.openEditModel = function(id) {
   updateFieldUI('sonnet', dirty.sonnet);
   updateFieldUI('opus', dirty.opus);
   updateFieldUI('haiku', dirty.haiku);
+  byId('subagentModel').value = e.CLAUDE_CODE_SUBAGENT_MODEL || '';
+  byId('effortLevel').value = e.CLAUDE_CODE_EFFORT_LEVEL || '';
   byId('modalOverlay').style.display = 'flex';
 };
 
@@ -753,6 +763,8 @@ function clearForm() {
   byId('sonnetModel').value = '';
   byId('opusModel').value = '';
   byId('haikuModel').value = '';
+  byId('subagentModel').value = '';
+  byId('effortLevel').value = '';
   dirty.sonnet = false;
   dirty.opus = false;
   dirty.haiku = false;
@@ -794,7 +806,9 @@ window.saveModal = function() {
 		  ANTHROPIC_MODEL: modelId,
 		  ANTHROPIC_DEFAULT_SONNET_MODEL: modelId,
 		  ANTHROPIC_DEFAULT_OPUS_MODEL: modelId,
-		  ANTHROPIC_DEFAULT_HAIKU_MODEL: modelId
+		  ANTHROPIC_DEFAULT_HAIKU_MODEL: modelId,
+		  CLAUDE_CODE_SUBAGENT_MODEL: modelId,
+		  CLAUDE_CODE_EFFORT_LEVEL: 'max'
 		}
 	  };
 	  vscode.postMessage({command:'addProvider', provider: provider, model: model});
@@ -824,6 +838,10 @@ window.saveModal = function() {
 	if (s) model.env.ANTHROPIC_DEFAULT_SONNET_MODEL = s;
 	if (o) model.env.ANTHROPIC_DEFAULT_OPUS_MODEL = o;
 	if (h) model.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = h;
+	var sub = byId('subagentModel').value.trim();
+	var effort = byId('effortLevel').value.trim();
+	if (sub) model.env.CLAUDE_CODE_SUBAGENT_MODEL = sub;
+	if (effort) model.env.CLAUDE_CODE_EFFORT_LEVEL = effort;
 
 	if (editMode === 'addModel') {
 	  var pId = byId('modelProvider').value;
